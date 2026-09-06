@@ -1,4 +1,4 @@
-import { TECHNICAL_RANGE, type Measurement, type SafetyThresholds, type Target } from '../types.ts';
+import { TECHNICAL_RANGE, type CategoryThresholds, type Measurement, type SafetyThresholds, type Target } from '../types.ts';
 import { classify } from './targets.ts';
 
 export type MessageLevel = 'info' | 'warning' | 'check' | 'safety' | 'error';
@@ -27,7 +27,7 @@ export const LEVEL_LABEL: Record<MessageLevel, string> = {
 
 export function validateDraft(
   d: Draft,
-  opts: { existing: Measurement[]; editingId?: string | null; targets: Target[]; safety: SafetyThresholds },
+  opts: { existing: Measurement[]; editingId?: string | null; targets: Target[]; safety: SafetyThresholds; categories: CategoryThresholds },
 ): ValidationMessage[] {
   const out: ValidationMessage[] = [];
   const isInt = (v: number | null) => v !== null && Number.isInteger(v);
@@ -60,10 +60,11 @@ export function validateDraft(
     out.push({ level: 'check', code: 'duplicate_values', requiresConfirm: true, text: 'Ista kombinacija SYS/DIA/puls već je zabilježena u kratkom razmaku.' });
   }
   const s = opts.safety;
-  if (sys >= s.sysCritical || dia >= s.diaCritical) {
+  const c = opts.categories;
+  if (sys >= c.veryHighSys || dia >= c.veryHighDia) {
     out.push({
       level: 'safety', code: 'critical_high', requiresConfirm: true,
-      text: `Izrazito visoka vrijednost (≥ ${s.sysCritical}/${s.diaCritical}). Odmorite 5 minuta i ponovite mjerenje. Ako imate bol u prsima, zaduhu, jaku glavoblju, smetnje vida ili govora, utrnulost ili slabost – nazovite 112.`,
+      text: `Vrlo visoki tlak (≥ ${c.veryHighSys}/${c.veryHighDia}). Odmorite 5 minuta i ponovite mjerenje. Ako imate bol u prsima, zaduhu, jaku glavoblju, smetnje vida ili govora, utrnulost ili slabost – nazovite 112.`,
     });
   } else if (sys <= s.sysLow || dia <= s.diaLow) {
     out.push({ level: 'warning', code: 'low', text: `Niska vrijednost (≤ ${s.sysLow}/${s.diaLow}). Ako imate vrtoglavicu ili slabost, ponovite mjerenje i obratite se liječniku.` });

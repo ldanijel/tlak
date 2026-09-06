@@ -53,7 +53,7 @@ export function AnalysisPage() {
 
       <section className="card">
         <h2>Kategorije (ESC, kućno mjerenje)</h2>
-        <p className="tiny">Nepovišeni: SYS &lt; {data.settings.categories.elevatedSys} i DIA &lt; {data.settings.categories.elevatedDia} · Povišeni: SYS {data.settings.categories.elevatedSys}–{data.settings.categories.highSys - 1} ili DIA {data.settings.categories.elevatedDia}–{data.settings.categories.highDia - 1} · Visoki: SYS ≥ {data.settings.categories.highSys} ili DIA ≥ {data.settings.categories.highDia}. Lošija od dviju vrijednosti određuje kategoriju.</p>
+        <p className="tiny">Nepovišeni: SYS &lt; {data.settings.categories.elevatedSys} i DIA &lt; {data.settings.categories.elevatedDia} · Povišeni: SYS {data.settings.categories.elevatedSys}–{data.settings.categories.highSys - 1} ili DIA {data.settings.categories.elevatedDia}–{data.settings.categories.highDia - 1} · Visoki: SYS {data.settings.categories.highSys}–{data.settings.categories.veryHighSys - 1} ili DIA {data.settings.categories.highDia}–{data.settings.categories.veryHighDia - 1} · Vrlo visoki: SYS ≥ {data.settings.categories.veryHighSys} ili DIA ≥ {data.settings.categories.veryHighDia}. Lošija od dviju vrijednosti određuje kategoriju.</p>
         {s.count ? <CategoryBar counts={s.categories} /> : <p className="muted">Nema mjerenja u razdoblju.</p>}
       </section>
 

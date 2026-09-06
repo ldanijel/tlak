@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-export const COLLECTIONS = ['measurements', 'targets', 'devices', 'medications', 'events', 'settings'];
+export const COLLECTIONS = ['measurements', 'targets', 'devices', 'medications', 'events', 'settings', 'ocrModels'];
 
 export function openDb(path) {
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });

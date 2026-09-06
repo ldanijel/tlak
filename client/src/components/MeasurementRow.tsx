@@ -9,10 +9,9 @@ import { categorize, CATEGORY_ICON, CATEGORY_SHORT } from '../lib/categories.ts'
 
 const STATUS_ICON = { in: '✓', above: '↑', below: '↓', none: '' };
 
-export function MeasurementRow({ m, targets, safety, categories }: { m: Measurement; targets: Target[]; safety: SafetyThresholds; categories: CategoryThresholds }) {
+export function MeasurementRow({ m, targets, categories }: { m: Measurement; targets: Target[]; safety?: SafetyThresholds; categories: CategoryThresholds }) {
   const status = classify(m, targets);
   const cat = categorize(m.systolic, m.diastolic, categories);
-  const critical = m.systolic >= safety.sysCritical || m.diastolic >= safety.diaCritical;
   return (
     <Link to={`/measurement/${m.id}`} className={`mrow ${m.includedInAverage ? '' : 'excluded'}`}>
       <div className="when tabular">{fmtDate(m.measuredAt)}<br />{fmtTime(m.measuredAt)}</div>
@@ -28,7 +27,6 @@ export function MeasurementRow({ m, targets, safety, categories }: { m: Measurem
         </div>
       </div>
       <div className="badges">
-        {critical && <Badge kind="safety">🚨 vrlo visoko</Badge>}
         <Badge kind={`cat-${cat}`}>{CATEGORY_ICON[cat]} {CATEGORY_SHORT[cat]}</Badge>
         {status !== 'none' && <Badge kind={status}>{STATUS_ICON[status]} {STATUS_LABEL[status]}</Badge>}
       </div>

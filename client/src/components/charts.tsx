@@ -32,21 +32,23 @@ export function MinAvgMaxBar({ label, min, avg, max, domain, color }: {
 }
 
 /* ---------- Raspodjela po ESC kategorijama ---------- */
-export function CategoryBar({ counts }: { counts: { normal: number; elevated: number; high: number } }) {
-  const total = counts.normal + counts.elevated + counts.high;
+export function CategoryBar({ counts }: { counts: { normal: number; elevated: number; high: number; veryhigh: number } }) {
+  const total = counts.normal + counts.elevated + counts.high + counts.veryhigh;
   if (!total) return null;
   const pct = (n: number) => Math.round((n / total) * 100);
   return (
     <div>
-      <div className="catbar" role="img" aria-label={`Nepovišeni ${counts.normal}, povišeni ${counts.elevated}, visoki ${counts.high}`}>
+      <div className="catbar" role="img" aria-label={`Nepovišeni ${counts.normal}, povišeni ${counts.elevated}, visoki ${counts.high}, vrlo visoki ${counts.veryhigh}`}>
         <i className="n" style={{ width: `${(counts.normal / total) * 100}%` }} />
         <i className="e" style={{ width: `${(counts.elevated / total) * 100}%` }} />
         <i className="h" style={{ width: `${(counts.high / total) * 100}%` }} />
+        <i className="v" style={{ width: `${(counts.veryhigh / total) * 100}%` }} />
       </div>
       <div className="legend">
         <span><i style={{ background: 'var(--cat-normal)' }} />● Nepovišeni {counts.normal} ({pct(counts.normal)} %)</span>
         <span><i style={{ background: 'var(--cat-elevated)' }} />▲ Povišeni {counts.elevated} ({pct(counts.elevated)} %)</span>
         <span><i style={{ background: 'var(--cat-high)' }} />■ Visoki {counts.high} ({pct(counts.high)} %)</span>
+        {counts.veryhigh > 0 && <span><i style={{ background: 'var(--cat-veryhigh)' }} />‼ Vrlo visoki {counts.veryhigh} ({pct(counts.veryhigh)} %)</span>}
       </div>
     </div>
   );

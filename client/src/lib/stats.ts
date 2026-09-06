@@ -25,7 +25,7 @@ export interface Summary {
   eveningSys: MinAvgMax;
   eveningDia: MinAvgMax;
   inTargetShare: number | null;
-  categories: { normal: number; elevated: number; high: number };
+  categories: { normal: number; elevated: number; high: number; veryhigh: number };
   delta: { sys: number | null; dia: number | null; pulse: number | null } | null;
 }
 
@@ -56,7 +56,7 @@ export function summarize(all: Measurement[], range: DateRange, targets: Target[
     const d = (a: number | null, b: number | null) => (a !== null && b !== null ? a - b : null);
     delta = prev.count ? { sys: d(cur.sys.avg, prev.sys.avg), dia: d(cur.dia.avg, prev.dia.avg), pulse: d(cur.pulse.avg, prev.pulse.avg) } : null;
   }
-  const categories = { normal: 0, elevated: 0, high: 0 };
+  const categories = { normal: 0, elevated: 0, high: 0, veryhigh: 0 };
   if (thresholds) for (const m of inc) categories[categorize(m.systolic, m.diastolic, thresholds)]++;
   return {
     count: inc.length,

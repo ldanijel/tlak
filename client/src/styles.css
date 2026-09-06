@@ -61,7 +61,7 @@
   --bg: #111110; --surface: #1d1d1c; --surface-2: #2a2a28; --border: #3a3a37; --text: #ffffff; --text-2: #c3c2b7; --text-3: #8f8e86;
   --accent: #3987e5; --sys: #3987e5; --dia: #d95926; --pulse: #199e70; --good: #5fbf5f; --warn: #e0a54a; --serious: #f08a5d; --critical: #f07178;
   --good-bg: #17301a; --warn-bg: #3a2c12; --serious-bg: #3d2416; --critical-bg: #3d1a1d; --info-bg: #17263a; --target-zone: rgba(57,135,229,.16); --shadow: none;
-  --cat-normal: #7fdc7f; --cat-normal-bg: #163d16; --cat-elevated: #ffd75e; --cat-elevated-bg: #4a3a00; --cat-high: #ff8a8a; --cat-high-bg: #4d1418;
+  --cat-normal: #7fdc7f; --cat-normal-bg: #163d16; --cat-elevated: #ffd75e; --cat-elevated-bg: #4a3a00; --cat-high: #ff8a8a; --cat-high-bg: #4d1418; --cat-veryhigh: #ffffff; --cat-veryhigh-bg: #a8121d;
 }
 
 * { box-sizing: border-box; }
@@ -158,10 +158,11 @@ p { margin: .4rem 0; }
 .badge.cat-normal { background: var(--cat-normal-bg); color: var(--cat-normal); border-color: var(--cat-normal); }
 .badge.cat-elevated { background: var(--cat-elevated-bg); color: var(--cat-elevated); border-color: var(--cat-elevated); }
 .badge.cat-high { background: var(--cat-high-bg); color: var(--cat-high); border-color: var(--cat-high); }
+.badge.cat-veryhigh { background: var(--cat-veryhigh-bg); color: var(--cat-veryhigh); border-color: var(--cat-veryhigh-bg); }
 .badge.big { font-size: .95rem; padding: 6px 12px; }
 .catbar { display: flex; height: 14px; border-radius: 7px; overflow: hidden; border: 1px solid var(--border); margin: 6px 0; }
 .catbar i { display: block; height: 100%; }
-.catbar i.n { background: var(--cat-normal); } .catbar i.e { background: var(--cat-elevated); } .catbar i.h { background: var(--cat-high); }
+.catbar i.n { background: var(--cat-normal); } .catbar i.e { background: var(--cat-elevated); } .catbar i.h { background: var(--cat-high); } .catbar i.v { background: var(--cat-veryhigh-bg); }
 .badge.calc { background: var(--surface-2); color: var(--text-3); font-weight: 500; }
 
 .msg { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; margin: 8px 0; border: 1px solid var(--border); }

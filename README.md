@@ -67,7 +67,7 @@ Ispred aplikacije postavite reverse proxy s TLS-om (Caddy/nginx/Traefik) i `TRUS
 | DELETE | `/api/auth/account` | brisanje računa i svih podataka |
 | POST | `/api/sync` | `{ since, changes[] }` → `{ rev, more, applied, rejected, changes[] }` |
 
-Kolekcije: `measurements`, `targets`, `devices`, `medications`, `events`, `settings`. Zapis se pohranjuje kao JSON (`data`) uz
+Kolekcije: `measurements`, `targets`, `devices`, `medications`, `events`, `settings`, `ocrModels`. Zapis se pohranjuje kao JSON (`data`) uz
 `updated_at`, `deleted`, `rev`. Podatkovni model mjerenja slijedi točku 17 zahtjeva (id, measuredAt, timezone, systolic, diastolic, pulse,
 source, period, sessionId, armLocation, bodyPosition, medicationTiming, deviceId, symptoms, tags, notes, includedInAverage, ocrConfidence,
 createdAt, updatedAt) i ostaje mapljiv na HealthKit/Health Connect.
@@ -81,6 +81,54 @@ createdAt, updatedAt) i ostaje mapljiv na HealthKit/Health Connect.
   DIA ≥ 85. Kategoriju određuje lošija od dviju vrijednosti (118/71 je „povišeni”). Prikaz zeleno/žuto/crveno uvijek uz tekst i simbol
   (● ▲ ■). Pragovi su podesivi u Postavkama; raspodjela po kategorijama prikazuje se na Početnoj, u Analizi i u izvještaju; Povijest
   ima filtar po kategoriji. Osobni ciljni raspon ostaje kao dodatna, neobvezna oznaka.
+
+## Verzija 1.2
+
+- **Četiri kategorije:** nepovišeni / povišeni / visoki / **vrlo visoki** (≥ 180/120, podesivo). Kategorija „vrlo visoki” ujedno je
+  sigurnosni prag: pri unosu traži potvrdu, savjetuje ponovljeno mjerenje i provjeru simptoma (112). Zasebni „sigurnosni pragovi” za
+  gornje vrijednosti više ne postoje; ostaju upozorenja za niske vrijednosti i puls.
+- **Pamćenje rasporeda zaslona po tlakomjeru:** u tijeku fotografije bira se tlakomjer (ili se novi dodaje na licu mjesta); pri potvrdi
+  se pamte okvir (kao udjeli fotografije) i položaj horizontala, pa se pri idućoj fotografiji istog tlakomjera automatski postavljaju.
+- **Učenje OCR-a po tlakomjeru** (`client/src/ocr/learn.ts`): svaka potvrda očitanja s fotografije uči aplikaciju kako izgledaju
+  znamenke tog tlakomjera. Iz binarizirane zone (SYS, DIA, puls) izdvajaju se pojedinačne znamenke projekcijom po stupcima, svaka se
+  normalizira u bitmapu 16×24 i sprema pod potvrđenom znamenkom (najviše 40 uzoraka po znamenki, najnoviji se zadržavaju). Kod idućeg
+  čitanja znamenke se uspoređuju s naučenim predlošcima (najbliži susjed, Hammingova udaljenost); model je aktivan nakon ≥ 6
+  potvrđenih znamenki, a pojedina znamenka vrijedi tek s ≥ 2 uzorka. Rezultat se spaja s Tesseractom: slaganje daje pouzdanost ≥ 90 %,
+  neslaganje spušta pouzdanost na ≤ 60 % i traži ručnu provjeru; nikad se ne popunjava nepouzdana vrijednost. Uz to se broji koja
+  kombinacija modela i predobrade daje točne rezultate za taj tlakomjer i ona dobiva prednost. Naučeno se sinkronizira s računom
+  (kolekcija `ocrModels`, vezana uz `deviceId`), a briše se gumbom „Zaboravi OCR” na stranici Tlakomjeri. Fotografije se i dalje ne
+  čuvaju, samo male bitmape znamenki.
+  U E2E testu na sintetičkoj slici treća potvrđena fotografija daje 100 % pouzdanost na sva tri polja.
+
+## Pristup s iPhonea i pokretanje na Windowsu
+
+**Windows (PowerShell):** instalirajte Node.js 22 LTS (installer s nodejs.org, uključite „Add to PATH”), zatim:
+
+```powershell
+git clone https://github.com/ldanijel/tlak.git
+cd tlak
+npm install
+npm run build
+npm start
+```
+
+Otvorite `http://localhost:3000`. Baza je u `data\tlak.db`. Pri prvom pokretanju Windows Defender pita za dopuštenje mreže;
+dopustite privatne mreže ako želite pristup s telefona. Poslužitelj radi dok je PowerShell prozor otvoren; za trajni rad koristite
+`docker compose up -d` (Docker Desktop) ili Windows Service (npr. NSSM).
+
+**iPhone – probni pristup u kućnoj mreži:** iPhone i računalo na istom Wi-Fiju; na računalu `ipconfig` (Windows) ili
+`ipconfig getifaddr en0` (Mac) daje IP, npr. `192.168.1.20`. U Safariju otvorite `http://192.168.1.20:3000`. Unos, fotografiranje i
+sinkronizacija rade. Ograničenja preko običnog HTTP-a: nema instalacije kao PWA s offline radom i preglednik može odbiti dijeljenje
+datoteka. Za ozbiljno korištenje potreban je HTTPS.
+
+**iPhone – trajni pristup (HTTPS), tri načina:**
+
+1. *VPS + Docker + Caddy (preporučeno):* na VPS-u s domenom `docker compose up -d --build`, a ispred Caddy s `reverse_proxy localhost:3000`
+   (automatski Let's Encrypt certifikat). Postavite `TRUST_PROXY=1`. Na iPhoneu otvorite `https://vasa-domena` → Dijeli → „Dodaj na
+   početni zaslon”. Nakon registracije postavite `ALLOW_REGISTRATION=false`.
+2. *Vlastito računalo + tunel:* Cloudflare Tunnel (`cloudflared tunnel --url http://localhost:3000`) daje javni HTTPS URL bez otvaranja
+   portova. Računalo mora biti upaljeno kad želite sinkronizirati; lokalni unos na telefonu radi i bez toga.
+3. *Tailscale:* privatna mreža između telefona i računala; `tailscale serve 3000` daje HTTPS adresu unutar vaše mreže.
 
 ## Pokrivenost zahtjeva
 

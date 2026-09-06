@@ -43,7 +43,6 @@ export function HomePage() {
             <div className="row" style={{ marginTop: 6, justifyContent: 'center' }}>
               {(() => { const c = categorize(last.systolic, last.diastolic, data.settings.categories); return <Badge kind={`cat-${c} big`} title={categoryRangeText(c, data.settings.categories)}>{CATEGORY_ICON[c]} {CATEGORY_LABEL[c]}</Badge>; })()}
               {(() => { const st = classify(last, data.targets); return st === 'none' ? null : <Badge kind={st}>{st === 'in' ? '✓' : st === 'above' ? '↑' : '↓'} {STATUS_LABEL[st]}</Badge>; })()}
-              {(last.systolic >= data.settings.safety.sysCritical || last.diastolic >= data.settings.safety.diaCritical) && <Badge kind="safety">🚨 vrlo visoko – ponovite mjerenje</Badge>}
               {(last.symptoms.length > 0 || last.notes) && <span className="small muted">{[...last.symptoms, last.notes].filter(Boolean).join(' · ')}</span>}
             </div>
           </Link>

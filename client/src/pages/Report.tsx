@@ -28,7 +28,7 @@ export function ReportPage() {
 
   const exportCsv = async () => { const r = await shareOrDownload(`tlak-${stamp()}.csv`, toCsv(list), 'text/csv;charset=utf-8'); toast.show(r === 'shared' ? 'CSV je podijeljen.' : 'CSV je preuzet.'); };
   const exportJson = async () => {
-    const b = makeBackup({ measurements: data.measurements, targets: data.targets, devices: data.devices, medications: data.medications, events: data.events, settings: [data.settings] });
+    const b = makeBackup({ measurements: data.measurements, targets: data.targets, devices: data.devices, medications: data.medications, events: data.events, settings: [data.settings], ocrModels: data.ocrModels });
     const r = await shareOrDownload(`tlak-kopija-${stamp()}.json`, JSON.stringify(b, null, 1), 'application/json');
     await markBackup();
     toast.show(r === 'shared' ? 'JSON kopija je podijeljena.' : 'JSON kopija je preuzeta.');
@@ -74,7 +74,7 @@ export function ReportPage() {
             <tr><th>Večernji prosjek (n)</th><td className="n">{fmtNum(s.eveningSys.avg, 1)}/{fmtNum(s.eveningDia.avg, 1)} ({s.eveningSys.n})</td></tr>
             <tr><th>Udio unutar osobnog cilja</th><td className="n">{s.inTargetShare === null ? 'cilj nije postavljen' : `${Math.round(s.inTargetShare * 100)} %`}</td></tr>
           </tbody></table>
-          <p className="small" style={{ marginTop: 10 }}>Raspodjela po ESC kategorijama kućnog tlaka (nepovišeni &lt; {data.settings.categories.elevatedSys}/{data.settings.categories.elevatedDia}, povišeni {data.settings.categories.elevatedSys}–{data.settings.categories.highSys - 1}/{data.settings.categories.elevatedDia}–{data.settings.categories.highDia - 1}, visoki ≥ {data.settings.categories.highSys}/{data.settings.categories.highDia}; lošija vrijednost određuje kategoriju):</p>
+          <p className="small" style={{ marginTop: 10 }}>Raspodjela po ESC kategorijama kućnog tlaka (nepovišeni &lt; {data.settings.categories.elevatedSys}/{data.settings.categories.elevatedDia}, povišeni {data.settings.categories.elevatedSys}–{data.settings.categories.highSys - 1}/{data.settings.categories.elevatedDia}–{data.settings.categories.highDia - 1}, visoki {data.settings.categories.highSys}–{data.settings.categories.veryHighSys - 1}/{data.settings.categories.highDia}–{data.settings.categories.veryHighDia - 1}, vrlo visoki ≥ {data.settings.categories.veryHighSys}/{data.settings.categories.veryHighDia}; lošija vrijednost određuje kategoriju):</p>
           <CategoryBar counts={s.categories} />
           {data.targets.length > 0 && <p className="tiny">Osobni ciljni rasponi: {data.targets.map((t) => `od ${fmtDate(t.effectiveFrom)}: ${t.sysMin}–${t.sysMax}/${t.diaMin}–${t.diaMax}${t.note ? ` (${t.note})` : ''}`).join('; ')}.</p>}
         </div>

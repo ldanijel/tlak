@@ -74,9 +74,8 @@ export interface HealthEvent extends SyncBase {
   note: string;
 }
 
+/** Ostali sigurnosni pragovi (niske vrijednosti i puls); gornji prag je kategorija „vrlo visoki”. */
 export interface SafetyThresholds {
-  sysCritical: number;
-  diaCritical: number;
   sysLow: number;
   diaLow: number;
   pulseHigh: number;
@@ -89,9 +88,11 @@ export interface CategoryThresholds {
   elevatedDia: number;
   highSys: number; // od ove vrijednosti: visoki
   highDia: number;
+  veryHighSys: number; // od ove vrijednosti: vrlo visoki (sigurnosna poruka, ponoviti mjerenje, 112 uz simptome)
+  veryHighDia: number;
 }
 
-export type BpCategory = 'normal' | 'elevated' | 'high';
+export type BpCategory = 'normal' | 'elevated' | 'high' | 'veryhigh';
 
 export interface Settings extends SyncBase {
   profileName: string;
@@ -104,7 +105,16 @@ export interface Settings extends SyncBase {
   backupReminderDays: number;
 }
 
-export type Collection = 'measurements' | 'targets' | 'devices' | 'medications' | 'events' | 'settings';
+/** Naučeni OCR model po tlakomjeru (predlošci znamenki, raspored zaslona). */
+export interface OcrModel extends SyncBase {
+  deviceId: string;
+  samples: Record<string, string[]>;
+  variantWins: Record<string, number>;
+  photos: number;
+  layout: { rect: { x: number; y: number; w: number; h: number }; dividers: [number, number] } | null;
+}
+
+export type Collection = 'measurements' | 'targets' | 'devices' | 'medications' | 'events' | 'settings' | 'ocrModels';
 
 export interface CollectionMap {
   measurements: Measurement;
@@ -113,20 +123,19 @@ export interface CollectionMap {
   medications: Medication;
   events: HealthEvent;
   settings: Settings;
+  ocrModels: OcrModel;
 }
 
-export const COLLECTIONS: Collection[] = ['measurements', 'targets', 'devices', 'medications', 'events', 'settings'];
+export const COLLECTIONS: Collection[] = ['measurements', 'targets', 'devices', 'medications', 'events', 'settings', 'ocrModels'];
 
 export const DEFAULT_SAFETY: SafetyThresholds = {
-  sysCritical: 180,
-  diaCritical: 120,
   sysLow: 90,
   diaLow: 60,
   pulseHigh: 120,
   pulseLow: 45,
 };
 
-export const DEFAULT_CATEGORIES: CategoryThresholds = { elevatedSys: 120, elevatedDia: 70, highSys: 135, highDia: 85 };
+export const DEFAULT_CATEGORIES: CategoryThresholds = { elevatedSys: 120, elevatedDia: 70, highSys: 135, highDia: 85, veryHighSys: 180, veryHighDia: 120 };
 
 export const TECHNICAL_RANGE = {
   systolic: [50, 260],

@@ -7,6 +7,8 @@ import { fmtDateTime, fromInputs, toInputDate, toInputTime, currentTimezone } fr
 import { suggestPeriod } from '../lib/periods.ts';
 import { hasErrors, needsConfirm, validateDraft, type ValidationMessage } from '../lib/validation.ts';
 import { Message, NumberInput, useToast } from '../components/ui.tsx';
+import { emptyModel, learn, modelReady, sampleCount, type OcrModelData } from '../ocr/learn.ts';
+import type { OcrModel } from '../types.ts';
 import { findSession } from './NewMeasurement.tsx';
 
 type Stage = 'pick' | 'crop' | 'ocr' | 'confirm';
@@ -22,6 +24,36 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
   const [rect, setRect] = useState<Rect>({ x: 0, y: 0, w: 0, h: 0 });
   const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
   const [dividers, setDividers] = useState<[number, number]>([0.34, 0.67]);
+  const [deviceId, setDeviceId] = useState<string>(() => { try { return localStorage.getItem('tlak.lastDevice') || data.devices[0]?.id || ''; } catch { return data.devices[0]?.id || ''; } });
+  const [newDevice, setNewDevice] = useState('');
+  const model: OcrModel | undefined = data.ocrModels.find((x) => x.deviceId === deviceId);
+  const modelData: OcrModelData = model ? { samples: model.samples, variantWins: model.variantWins, photos: model.photos, layout: model.layout } : emptyModel();
+  const [layoutApplied, setLayoutApplied] = useState(false);
+
+  const applyLayout = (c: HTMLCanvasElement, m: OcrModel | undefined) => {
+    if (m?.layout) {
+      const l = m.layout;
+      setRect({ x: l.rect.x * c.width, y: l.rect.y * c.height, w: l.rect.w * c.width, h: l.rect.h * c.height });
+      setDividers(l.dividers);
+      setLayoutApplied(true);
+    } else {
+      setRect({ x: c.width * 0.15, y: c.height * 0.25, w: c.width * 0.7, h: c.height * 0.5 });
+      setDividers([0.34, 0.67]);
+      setLayoutApplied(false);
+    }
+  };
+  const chooseDevice = (id: string) => {
+    setDeviceId(id);
+    try { localStorage.setItem('tlak.lastDevice', id); } catch { /* ignore */ }
+    if (source) applyLayout(source, data.ocrModels.find((x) => x.deviceId === id));
+  };
+  const addDevice = async () => {
+    const name = newDevice.trim();
+    if (!name) return;
+    const d = await save('devices', { name, cuff: 'upper_arm', note: '' });
+    setNewDevice('');
+    chooseDevice(d.id);
+  };
   const [progress, setProgress] = useState({ stage: '', p: 0 });
   const [result, setResult] = useState<OcrResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -42,9 +74,8 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
       const img = await loadImage(file);
       const c = toCanvas(img, 1600);
       setSource(c);
-      setRect({ x: c.width * 0.15, y: c.height * 0.25, w: c.width * 0.7, h: c.height * 0.5 });
       setRotation(0);
-      setDividers([0.34, 0.67]);
+      applyLayout(c, model);
       if (mode === 'gallery') {
         const d = await exifDate(file);
         if (d) { setDate(toInputDate(d)); setTime(toInputTime(d)); setDateSrc('exif'); }
@@ -61,7 +92,7 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
     setStage('ocr');
     try {
       const display = cropRotate(source, rect, 0);
-      const r = await recognizeBands(display, dividers, (s, p) => setProgress({ stage: s, p }));
+      const r = await recognizeBands(display, dividers, (s, p) => setProgress({ stage: s, p }), modelData);
       setResult(r);
       setSys(r.systolic.value); setDia(r.diastolic.value); setPulse(r.pulse.value);
       setMsgs([]); setConfirmed(false);
@@ -74,18 +105,32 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
 
   const measuredAt = fromInputs(date, time).toISOString();
   const onSave = async () => {
-    const m = validateDraft({ systolic: sys, diastolic: dia, pulse, measuredAt, period: suggestPeriod(new Date(measuredAt)) }, { existing: data.measurements, targets: data.targets, safety: data.settings.safety });
+    const m = validateDraft({ systolic: sys, diastolic: dia, pulse, measuredAt, period: suggestPeriod(new Date(measuredAt)) }, { existing: data.measurements, targets: data.targets, safety: data.settings.safety, categories: data.settings.categories });
     setMsgs(m);
     if (hasErrors(m)) return;
     if (needsConfirm(m) && !confirmed) { setConfirmed(true); return; }
     const saved = await save('measurements', {
       measuredAt, timezone: currentTimezone(), systolic: sys!, diastolic: dia!, pulse: pulse!,
       source: mode, period: suggestPeriod(new Date(measuredAt)), sessionId: findSession(measuredAt, data.measurements, data.settings.sessionWindowMinutes),
-      armLocation: 'unknown', bodyPosition: 'unknown', medicationTiming: 'unknown', deviceId: data.devices[0]?.id ?? null,
+      armLocation: 'unknown', bodyPosition: 'unknown', medicationTiming: 'unknown', deviceId: deviceId || null,
       symptoms: [], tags: [], notes: '', includedInAverage: true, exclusionReason: '',
       ocrConfidence: result ? { systolic: result.systolic.confidence, diastolic: result.diastolic.confidence, pulse: result.pulse.confidence } : null,
       confirmedUnusual: needsConfirm(m),
     });
+    // Učenje: potvrđene znamenke i raspored zaslona pamte se za ovaj tlakomjer.
+    if (deviceId && result && source) {
+      let md = { ...modelData, samples: { ...modelData.samples }, variantWins: { ...modelData.variantWins } };
+      const confirmedValues = [String(sys), String(dia), String(pulse)];
+      const ocrValues = [result.systolic.value, result.diastolic.value, result.pulse.value];
+      confirmedValues.forEach((v, i) => {
+        md = learn(md, result.glyphs[i] || [], v);
+        const win = result.variantWinner[i];
+        if (win && ocrValues[i] === Number(v)) md.variantWins[win] = (md.variantWins[win] || 0) + 1;
+      });
+      md.photos += 1;
+      md.layout = { rect: { x: rect.x / source.width, y: rect.y / source.height, w: rect.w / source.width, h: rect.h / source.height }, dividers };
+      await save('ocrModels', { id: model?.id || deviceId, deviceId, ...md });
+    }
     // Fotografija se ne čuva: izvor je uklonjen iz radne memorije.
     setSource(null); setResult(null);
     toast.show(`Mjerenje ${saved.systolic}/${saved.diastolic}, puls ${saved.pulse} spremljeno.`, { actionLabel: 'Poništi', onAction: () => { void remove('measurements', saved.id); } });
@@ -93,7 +138,17 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
   };
 
   /* --- izrezivanje: povlačenje ručica i pomicanje okvira --- */
-  const scale = () => (source && stageRef.current ? source.width / stageRef.current.clientWidth : 1);
+  const [stageW, setStageW] = useState(0);
+  useEffect(() => {
+    if (stage !== 'crop' || !stageRef.current) return;
+    const el = stageRef.current;
+    const measure = () => setStageW(el.clientWidth);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [stage, source]);
+  const scale = () => (source && stageW ? source.width / stageW : 1);
   const onPointerDown = (handle: string) => (e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation(); // ručice i horizontale ne smiju pokrenuti pomicanje cijelog okvira
@@ -133,6 +188,23 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
   const conf = (k: 'systolic' | 'diastolic' | 'pulse') => result?.[k];
   const flag = (k: 'systolic' | 'diastolic' | 'pulse') => { const c = conf(k); return !c || c.value === null || c.confidence < 70; };
 
+  const devicePicker = (
+    <div className="field">
+      <label>Tlakomjer (za pamćenje rasporeda i učenje znamenki)
+        <select value={deviceId} onChange={(e) => chooseDevice(e.target.value)}>
+          <option value="">– nije odabran –</option>
+          {data.devices.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+        </select>
+      </label>
+      {(!data.devices.length || deviceId === '') && (
+        <div className="row" style={{ marginTop: 4 }}>
+          <input placeholder="Naziv novog tlakomjera (npr. Omron M3)" value={newDevice} onChange={(e) => setNewDevice(e.target.value)} style={{ flex: 1, minHeight: 40, padding: '6px 10px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)' }} />
+          <button type="button" className="btn small" onClick={() => void addDevice()} disabled={!newDevice.trim()}>Dodaj</button>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <main className="page">
       <div className="page-header"><h1>{mode === 'camera' ? 'Fotografiraj tlakomjer' : 'Odaberi fotografiju'}</h1><Link to="/new" className="btn small">Ručni unos</Link></div>
@@ -149,7 +221,8 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
 
       {stage === 'crop' && source && (
         <div className="card">
-          <p className="small muted">Povucite rubove ili kutove okvira oko zaslona tlakomjera, a žute horizontale postavite tako da odvajaju redove SYS, DIA i puls. Svaka zona čita se zasebno.</p>
+          {devicePicker}
+          <p className="small muted">{layoutApplied ? 'Okvir i horizontale postavljeni su prema prošlom čitanju ovog tlakomjera; po potrebi ih prilagodite.' : 'Povucite rubove ili kutove okvira oko zaslona tlakomjera, a žute horizontale postavite tako da odvajaju redove SYS, DIA i puls. Svaka zona čita se zasebno.'}</p>
           <div className="photo-stage" ref={stageRef} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
             <CanvasView canvas={source} />
             {(() => { const k = 1 / scale(); return (
@@ -204,7 +277,7 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
             Datum i vrijeme: <strong className="tabular">{fmtDateTime(measuredAt)}</strong>{' '}
             <span className="muted">({dateSrc === 'exif' ? 'iz metapodataka fotografije' : mode === 'camera' ? 'trenutačno vrijeme' : 'metapodaci nisu dostupni – trenutačno vrijeme'})</span>
           </p>
-          <p className="tiny">Model: {result.engine}. Ništa se ne sprema bez vaše potvrde.</p>
+          <p className="tiny">Model: {result.engine}. Ništa se ne sprema bez vaše potvrde.{deviceId ? ` Potvrdom aplikacija uči znamenke ovog tlakomjera (${sampleCount(modelData)} naučenih znamenki${modelReady(modelData) ? ', aktivno' : ', još se uči'}).` : ' Odaberite tlakomjer da bi aplikacija učila njegove znamenke.'}</p>
           {msgs.map((m, i) => <Message key={i} level={m.level}>{m.text}{m.suggestSwap && <div><button type="button" className="btn small" onClick={() => { const s = sys; setSys(dia); setDia(s); setMsgs([]); }}>Zamijeni SYS i DIA</button></div>}</Message>)}
           <div className="stack" style={{ marginTop: 8 }}>
             <button type="submit" className="btn primary big">{confirmed && needsConfirm(msgs) ? 'Potvrdi i spremi' : 'Potvrdi i spremi'}</button>

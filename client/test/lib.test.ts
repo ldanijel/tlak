@@ -66,7 +66,7 @@ test('izvedeni pokazatelji', () => {
 
 test('validacija: nedostaje, SYS<=DIA, raspon, duplikat, sigurnosna poruka, cilj', () => {
   const base = { measuredAt: '2026-09-01T06:00:00.000Z', period: 'morning' as const };
-  const opts = { existing: [m({ measuredAt: '2026-09-01T06:00:00.000Z', systolic: 120, diastolic: 80, pulse: 70 })], targets: [target], safety: DEFAULT_SAFETY };
+  const opts = { existing: [m({ measuredAt: '2026-09-01T06:00:00.000Z', systolic: 120, diastolic: 80, pulse: 70 })], targets: [target], safety: DEFAULT_SAFETY, categories: DEFAULT_CATEGORIES };
   assert.ok(hasErrors(validateDraft({ ...base, systolic: 120, diastolic: null, pulse: 70 }, opts)));
   const swapped = validateDraft({ ...base, systolic: 80, diastolic: 120, pulse: 70 }, opts);
   assert.ok(swapped.some((x) => x.suggestSwap));
@@ -141,8 +141,10 @@ test('ESC kategorije: lošija komponenta određuje kategoriju', () => {
   assert.equal(categorize(134, 84, DEFAULT_CATEGORIES), 'elevated');
   assert.equal(categorize(135, 60, DEFAULT_CATEGORIES), 'high');
   assert.equal(categorize(110, 85, DEFAULT_CATEGORIES), 'high');
+  assert.equal(categorize(180, 80, DEFAULT_CATEGORIES), 'veryhigh');
+  assert.equal(categorize(150, 120, DEFAULT_CATEGORIES), 'veryhigh');
   const s = summarize([m({ systolic: 118, diastolic: 71 }), m({ systolic: 140, diastolic: 80 }), m({ systolic: 110, diastolic: 65 })], { from: new Date('2026-08-31T00:00:00Z'), to: new Date('2026-09-02T00:00:00Z') }, [], false, DEFAULT_CATEGORIES);
-  assert.deepEqual(s.categories, { normal: 1, elevated: 1, high: 1 });
+  assert.deepEqual(s.categories, { normal: 1, elevated: 1, high: 1, veryhigh: 0 });
 });
 
 test('OCR zona: spajanje znamenki, raspon, pouzdanost', () => {

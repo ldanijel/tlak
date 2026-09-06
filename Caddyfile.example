@@ -1,0 +1,5 @@
+# Primjer za VPS: zamijenite domenu. Caddy sam pribavlja TLS certifikat.
+tlak.example.com {
+    encode zstd gzip
+    reverse_proxy localhost:3000
+}

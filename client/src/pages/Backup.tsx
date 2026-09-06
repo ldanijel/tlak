@@ -20,7 +20,7 @@ export function BackupPage() {
   const [csv, setCsv] = useState<{ rows: CsvRow[]; errors: string[]; dupes: number } | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  const full = () => makeBackup({ measurements: data.measurements, targets: data.targets, devices: data.devices, medications: data.medications, events: data.events, settings: [data.settings] });
+  const full = () => makeBackup({ measurements: data.measurements, targets: data.targets, devices: data.devices, medications: data.medications, events: data.events, settings: [data.settings], ocrModels: data.ocrModels });
 
   const exportJson = async () => {
     const r = await shareOrDownload(`tlak-kopija-${stamp()}.json`, JSON.stringify(full(), null, 1), 'application/json');

@@ -22,8 +22,8 @@ export function MeasurementDetailPage() {
   const status = classify(m, data.targets);
   const bounds = boundsFor(targetFor(data.targets, m.measuredAt), m.period);
   const session = groupSessions(data.measurements.filter((x) => x.sessionId === m.sessionId || x.id === m.id), data.settings.sessionWindowMinutes).find((s) => s.measurements.some((x) => x.id === m.id));
-  const critical = m.systolic >= data.settings.safety.sysCritical || m.diastolic >= data.settings.safety.diaCritical;
   const cat = categorize(m.systolic, m.diastolic, data.settings.categories);
+  const critical = cat === 'veryhigh';
 
   const del = async () => {
     setConfirmDel(false);
@@ -60,9 +60,8 @@ export function MeasurementDetailPage() {
           {status !== 'none' && <Badge kind={status}>{status === 'in' ? '✓' : status === 'above' ? '↑' : '↓'} {STATUS_LABEL[status]}</Badge>}
           {bounds && <span className="tiny">osobni cilj {bounds.sysMin}–{bounds.sysMax}/{bounds.diaMin}–{bounds.diaMax}</span>}
           {!m.includedInAverage && <Badge kind="none">isključeno iz prosjeka</Badge>}
-          {critical && <Badge kind="safety">🚨 vrlo visoko</Badge>}
         </div>
-        {critical && <Message level="safety">Izrazito visoka vrijednost. Ponovite mjerenje nakon 5 minuta mirovanja. Uz bol u prsima, zaduhu, smetnje vida ili govora, utrnulost ili slabost nazovite 112.</Message>}
+        {critical && <Message level="safety">Vrlo visoki tlak. Ponovite mjerenje nakon 5 minuta mirovanja. Uz bol u prsima, zaduhu, smetnje vida ili govora, utrnulost ili slabost nazovite 112.</Message>}
         {!m.includedInAverage && <p className="small muted">Razlog isključenja: {m.exclusionReason || '–'}</p>}
       </section>
 

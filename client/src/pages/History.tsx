@@ -52,7 +52,7 @@ export function HistoryPage() {
         {sel('period', [['', 'Jutro/večer: sve'], ['morning', 'Jutro'], ['evening', 'Večer'], ['other', 'Drugo']])}
         {sel('timing', [['', 'Terapija: sve'], ['before', 'Prije terapije'], ['after', 'Nakon terapije']])}
         {sel('source', [['', 'Izvor: svi'], ['manual', 'Ručni'], ['photo', 'Fotografija'], ['import', 'Uvoz']])}
-        {sel('category', [['', 'Kategorija: sve'], ['normal', 'Nepovišeni'], ['elevated', 'Povišeni'], ['high', 'Visoki']])}
+        {sel('category', [['', 'Kategorija: sve'], ['normal', 'Nepovišeni'], ['elevated', 'Povišeni'], ['high', 'Visoki'], ['veryhigh', 'Vrlo visoki']])}
         {sel('target', [['', 'Cilj: sve'], ['in', 'Unutar cilja'], ['out', 'Izvan cilja']])}
         {sel('note', [['', 'Bilješke: sve'], ['1', 'S bilješkom/simptomom']])}
         {sel('included', [['', 'Prosjek: sve'], ['yes', 'Uključeno'], ['no', 'Isključeno']])}
@@ -62,7 +62,7 @@ export function HistoryPage() {
       ) : groups.map(([day, ms]) => (
         <section key={day} className="card tight" aria-label={fmtDate(ms[0].measuredAt)}>
           <div className="tiny" style={{ padding: '2px 4px' }}>{fmtDate(ms[0].measuredAt)}</div>
-          <div className="list">{ms.map((m) => <MeasurementRow key={m.id} m={m} targets={data.targets} safety={data.settings.safety} categories={data.settings.categories} />)}</div>
+          <div className="list">{ms.map((m) => <MeasurementRow key={m.id} m={m} targets={data.targets} categories={data.settings.categories} />)}</div>
         </section>
       ))}
       {list.length > limit && <button type="button" className="btn block" onClick={() => setLimit(limit + 200)}>Prikaži još ({list.length - limit})</button>}

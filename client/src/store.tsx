@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   COLLECTIONS, DEFAULT_CATEGORIES, DEFAULT_SAFETY, type Collection, type CollectionMap, type Device, type HealthEvent, type Measurement, type Medication,
-  type Settings, type SyncBase, type Target,
+  type OcrModel, type Settings, type SyncBase, type Target,
 } from './types.ts';
 import { clearAllData, getAll, getMeta, markAllDirty, putMany, setMeta, type Stored } from './db/idb.ts';
 import { uid } from './lib/ids.ts';
@@ -16,6 +16,7 @@ export interface Data {
   medications: Medication[];
   events: HealthEvent[];
   settings: Settings;
+  ocrModels: OcrModel[];
 }
 
 type NewRecord<T extends SyncBase> = Omit<T, keyof SyncBase> & Partial<SyncBase>;
@@ -57,17 +58,17 @@ function alive<T extends SyncBase>(list: Stored<T>[]): T[] {
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
-  const [data, setData] = useState<Data>({ measurements: [], targets: [], devices: [], medications: [], events: [], settings: defaultSettings() });
+  const [data, setData] = useState<Data>({ measurements: [], targets: [], devices: [], medications: [], events: [], settings: defaultSettings(), ocrModels: [] });
   const [sync, setSync] = useState<SyncState>({ status: 'off', lastSyncAt: null, error: null, pending: 0 });
   const [auth, setAuthState] = useState<AuthState | null>(loadAuth());
   const [lastBackupAt, setLastBackupAt] = useState<string | null>(null);
-  const raw = useRef<{ [C in Collection]: Stored<CollectionMap[C]>[] }>({ measurements: [], targets: [], devices: [], medications: [], events: [], settings: [] });
+  const raw = useRef<{ [C in Collection]: Stored<CollectionMap[C]>[] }>({ measurements: [], targets: [], devices: [], medications: [], events: [], settings: [], ocrModels: [] });
 
   const reload = useCallback(async () => {
-    const [measurements, targets, devices, medications, events, settings] = await Promise.all([
-      getAll('measurements'), getAll('targets'), getAll('devices'), getAll('medications'), getAll('events'), getAll('settings'),
+    const [measurements, targets, devices, medications, events, settings, ocrModels] = await Promise.all([
+      getAll('measurements'), getAll('targets'), getAll('devices'), getAll('medications'), getAll('events'), getAll('settings'), getAll('ocrModels'),
     ]);
-    raw.current = { measurements, targets, devices, medications, events, settings };
+    raw.current = { measurements, targets, devices, medications, events, settings, ocrModels };
     // Mjerenja koja su izbrisana i sinkronizirana zadržavamo u memoriji radi "vrati" tijekom sesije.
     const s = settings.find((x) => x.id === 'main');
     setData({
@@ -76,6 +77,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       devices: alive(devices),
       medications: alive(medications),
       events: alive(events).sort((a, b) => a.date.localeCompare(b.date)),
+      ocrModels: alive(ocrModels),
       settings: s ? { ...defaultSettings(), ...(s as unknown as Settings), safety: { ...DEFAULT_SAFETY, ...(s as unknown as Settings).safety }, categories: { ...DEFAULT_CATEGORIES, ...((s as unknown as Settings).categories || {}) } } : defaultSettings(),
     });
     setLastBackupAt((await getMeta<string>('lastBackupAt')) ?? null);

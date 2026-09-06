@@ -53,7 +53,7 @@ export function NewMeasurementPage() {
   // Ako korisnik nije mijenjao datum/vrijeme, zadržavaju se i sekunde stvarnog trenutka unosa.
   const untouched = date === toInputDate(initialAt) && time === toInputTime(initialAt);
   const measuredAt = (untouched ? initialAt : fromInputs(date, time)).toISOString();
-  const draftMsgs = () => validateDraft({ systolic: sys, diastolic: dia, pulse, measuredAt, period }, { existing: data.measurements, editingId: editing?.id, targets: data.targets, safety: data.settings.safety });
+  const draftMsgs = () => validateDraft({ systolic: sys, diastolic: dia, pulse, measuredAt, period }, { existing: data.measurements, editingId: editing?.id, targets: data.targets, safety: data.settings.safety, categories: data.settings.categories });
 
   const onSave = async () => {
     const m = draftMsgs();

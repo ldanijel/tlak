@@ -11,6 +11,7 @@ interface TlakDB extends DBSchema {
   medications: { key: string; value: Stored<CollectionMap['medications']> };
   events: { key: string; value: Stored<CollectionMap['events']> };
   settings: { key: string; value: Stored<CollectionMap['settings']> };
+  ocrModels: { key: string; value: Stored<CollectionMap['ocrModels']> };
   meta: { key: string; value: unknown };
 }
 
@@ -18,16 +19,19 @@ let dbPromise: Promise<IDBPDatabase<TlakDB>> | null = null;
 
 export function db(): Promise<IDBPDatabase<TlakDB>> {
   if (!dbPromise) {
-    dbPromise = openDB<TlakDB>('tlak', 1, {
-      upgrade(d) {
-        const m = d.createObjectStore('measurements', { keyPath: 'id' });
-        m.createIndex('measuredAt', 'measuredAt');
-        d.createObjectStore('targets', { keyPath: 'id' });
-        d.createObjectStore('devices', { keyPath: 'id' });
-        d.createObjectStore('medications', { keyPath: 'id' });
-        d.createObjectStore('events', { keyPath: 'id' });
-        d.createObjectStore('settings', { keyPath: 'id' });
-        d.createObjectStore('meta');
+    dbPromise = openDB<TlakDB>('tlak', 2, {
+      upgrade(d, oldVersion) {
+        if (oldVersion < 1) {
+          const m = d.createObjectStore('measurements', { keyPath: 'id' });
+          m.createIndex('measuredAt', 'measuredAt');
+          d.createObjectStore('targets', { keyPath: 'id' });
+          d.createObjectStore('devices', { keyPath: 'id' });
+          d.createObjectStore('medications', { keyPath: 'id' });
+          d.createObjectStore('events', { keyPath: 'id' });
+          d.createObjectStore('settings', { keyPath: 'id' });
+          d.createObjectStore('meta');
+        }
+        if (oldVersion < 2) d.createObjectStore('ocrModels', { keyPath: 'id' });
       },
     });
   }

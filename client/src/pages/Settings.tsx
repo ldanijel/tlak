@@ -51,25 +51,25 @@ export function SettingsPage() {
 
       <section className="card">
         <h2>Kategorije tlaka (ESC)</h2>
-        <p className="tiny">Zadano prema ESC smjernicama za kućno mjerenje: nepovišeni &lt; 120/70, povišeni 120–134/70–84, visoki ≥ 135/85. Kategoriju određuje lošija od dviju vrijednosti (npr. 118/71 je povišeni zbog DIA).</p>
+        <p className="tiny">Zadano prema ESC smjernicama za kućno mjerenje: nepovišeni &lt; 120/70, povišeni 120–134/70–84, visoki 135–179/85–119, vrlo visoki ≥ 180/120. Kategoriju određuje lošija od dviju vrijednosti (npr. 118/71 je povišeni zbog DIA). Kod „vrlo visoki” aplikacija traži ponovljeno mjerenje i provjeru simptoma (112).</p>
         <div className="grid2">
           <Field label="Povišeni – SYS od"><input type="number" value={cat.elevatedSys} onChange={(e) => setCat({ ...cat, elevatedSys: Number(e.target.value) })} /></Field>
           <Field label="Povišeni – DIA od"><input type="number" value={cat.elevatedDia} onChange={(e) => setCat({ ...cat, elevatedDia: Number(e.target.value) })} /></Field>
           <Field label="Visoki – SYS od"><input type="number" value={cat.highSys} onChange={(e) => setCat({ ...cat, highSys: Number(e.target.value) })} /></Field>
           <Field label="Visoki – DIA od"><input type="number" value={cat.highDia} onChange={(e) => setCat({ ...cat, highDia: Number(e.target.value) })} /></Field>
+          <Field label="Vrlo visoki – SYS od"><input type="number" value={cat.veryHighSys} onChange={(e) => setCat({ ...cat, veryHighSys: Number(e.target.value) })} /></Field>
+          <Field label="Vrlo visoki – DIA od"><input type="number" value={cat.veryHighDia} onChange={(e) => setCat({ ...cat, veryHighDia: Number(e.target.value) })} /></Field>
         </div>
         <div className="row">
-          <button type="button" className="btn primary" onClick={() => { if (cat.elevatedSys >= cat.highSys || cat.elevatedDia >= cat.highDia) { toast.show('Prag „povišeni” mora biti manji od praga „visoki”.'); return; } void updateSettings({ categories: cat }); toast.show('Kategorije su spremljene.'); }}>Spremi kategorije</button>
+          <button type="button" className="btn primary" onClick={() => { if (cat.elevatedSys >= cat.highSys || cat.elevatedDia >= cat.highDia || cat.highSys >= cat.veryHighSys || cat.highDia >= cat.veryHighDia) { toast.show('Pragovi moraju rasti: povišeni < visoki < vrlo visoki.'); return; } void updateSettings({ categories: cat }); toast.show('Kategorije su spremljene.'); }}>Spremi kategorije</button>
           <button type="button" className="btn" onClick={() => { setCat({ ...DEFAULT_CATEGORIES }); void updateSettings({ categories: { ...DEFAULT_CATEGORIES } }); }}>Vrati ESC zadano</button>
         </div>
       </section>
 
       <section className="card">
-        <h2>Sigurnosni pragovi</h2>
-        <p className="tiny">Odvojeni od osobnog cilja. Pri prekoračenju aplikacija traži ponovljeno mjerenje i provjeru simptoma; ne postavlja dijagnozu.</p>
+        <h2>Upozorenja na niske vrijednosti i puls</h2>
+        <p className="tiny">Gornji sigurnosni prag je kategorija „vrlo visoki” (gore). Ovdje su upozorenja za niske vrijednosti i neuobičajen puls; aplikacija ne postavlja dijagnozu.</p>
         <div className="grid2">
-          <Field label="SYS – sigurnosna poruka od"><input type="number" value={safety.sysCritical} onChange={(e) => setSafety({ ...safety, sysCritical: Number(e.target.value) })} /></Field>
-          <Field label="DIA – sigurnosna poruka od"><input type="number" value={safety.diaCritical} onChange={(e) => setSafety({ ...safety, diaCritical: Number(e.target.value) })} /></Field>
           <Field label="SYS – upozorenje na nisko do"><input type="number" value={safety.sysLow} onChange={(e) => setSafety({ ...safety, sysLow: Number(e.target.value) })} /></Field>
           <Field label="DIA – upozorenje na nisko do"><input type="number" value={safety.diaLow} onChange={(e) => setSafety({ ...safety, diaLow: Number(e.target.value) })} /></Field>
           <Field label="Puls – visok od"><input type="number" value={safety.pulseHigh} onChange={(e) => setSafety({ ...safety, pulseHigh: Number(e.target.value) })} /></Field>
