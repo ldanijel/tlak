@@ -1,0 +1,13 @@
+services:
+  tlak:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      ALLOW_REGISTRATION: "true"   # nakon što stvorite svoje račune postavite na "false"
+      TRUST_PROXY: "1"             # ako je ispred reverse proxy (Caddy, nginx, Traefik) s TLS-om
+    volumes:
+      - tlak-data:/data
+    restart: unless-stopped
+volumes:
+  tlak-data:
