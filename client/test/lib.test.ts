@@ -7,7 +7,9 @@ import { targetFor, classify } from '../src/lib/targets.ts';
 import { parseReading } from '../src/ocr/parse.ts';
 import { resolveRange, previousRange, suggestPeriod } from '../src/lib/periods.ts';
 import { fmtDate, fmtTime } from '../src/lib/format.ts';
-import { DEFAULT_SAFETY, type Measurement, type Target } from '../src/types.ts';
+import { DEFAULT_CATEGORIES, DEFAULT_SAFETY, type Measurement, type Target } from '../src/types.ts';
+import { categorize } from '../src/lib/categories.ts';
+import { parseBand } from '../src/ocr/parse.ts';
 
 const m = (over: Partial<Measurement>): Measurement => ({
   id: over.id || Math.random().toString(36).slice(2), createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z', deletedAt: null,
@@ -130,4 +132,23 @@ test('razdoblja: 7 dana, prethodno razdoblje, prijedlog jutro/večer', () => {
   assert.equal(suggestPeriod(new Date(2026, 8, 6, 7)), 'morning');
   assert.equal(suggestPeriod(new Date(2026, 8, 6, 20)), 'evening');
   assert.equal(suggestPeriod(new Date(2026, 8, 6, 14)), 'other');
+});
+
+test('ESC kategorije: lošija komponenta određuje kategoriju', () => {
+  assert.equal(categorize(118, 69, DEFAULT_CATEGORIES), 'normal');
+  assert.equal(categorize(118, 71, DEFAULT_CATEGORIES), 'elevated');
+  assert.equal(categorize(120, 69, DEFAULT_CATEGORIES), 'elevated');
+  assert.equal(categorize(134, 84, DEFAULT_CATEGORIES), 'elevated');
+  assert.equal(categorize(135, 60, DEFAULT_CATEGORIES), 'high');
+  assert.equal(categorize(110, 85, DEFAULT_CATEGORIES), 'high');
+  const s = summarize([m({ systolic: 118, diastolic: 71 }), m({ systolic: 140, diastolic: 80 }), m({ systolic: 110, diastolic: 65 })], { from: new Date('2026-08-31T00:00:00Z'), to: new Date('2026-09-02T00:00:00Z') }, [], false, DEFAULT_CATEGORIES);
+  assert.deepEqual(s.categories, { normal: 1, elevated: 1, high: 1 });
+});
+
+test('OCR zona: spajanje znamenki, raspon, pouzdanost', () => {
+  const tok = (text: string, x: number, conf = 90) => ({ text, conf, x0: x, y0: 0, x1: x + 30, y1: 40 });
+  assert.equal(parseBand([tok('1', 0), tok('28', 40)], [50, 260]).value, 128);
+  assert.equal(parseBand([tok('612', 0)], [30, 160]).value, null);
+  assert.equal(parseBand([tok('82', 0, 40)], [30, 160]).reason, 'niska pouzdanost');
+  assert.equal(parseBand([], [30, 160]).value, null);
 });

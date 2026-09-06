@@ -1,4 +1,5 @@
-import type { Measurement, Target } from '../types.ts';
+import type { CategoryThresholds, Measurement, Target } from '../types.ts';
+import { categorize } from './categories.ts';
 import { localDayKey } from './format.ts';
 import { inRange, previousRange, type DateRange } from './periods.ts';
 import { classify } from './targets.ts';
@@ -24,6 +25,7 @@ export interface Summary {
   eveningSys: MinAvgMax;
   eveningDia: MinAvgMax;
   inTargetShare: number | null;
+  categories: { normal: number; elevated: number; high: number };
   delta: { sys: number | null; dia: number | null; pulse: number | null } | null;
 }
 
@@ -35,7 +37,7 @@ export function analyzed(ms: Measurement[]): Measurement[] {
   return ms.filter((m) => !m.deletedAt && m.includedInAverage);
 }
 
-export function summarize(all: Measurement[], range: DateRange, targets: Target[], withDelta = true): Summary {
+export function summarize(all: Measurement[], range: DateRange, targets: Target[], withDelta = true, thresholds?: CategoryThresholds): Summary {
   const inR = active(all).filter((m) => inRange(m.measuredAt, range));
   const inc = inR.filter((m) => m.includedInAverage);
   const morning = inc.filter((m) => m.period === 'morning');
@@ -50,12 +52,15 @@ export function summarize(all: Measurement[], range: DateRange, targets: Target[
   };
   let delta: Summary['delta'] = null;
   if (withDelta) {
-    const prev = summarize(all, previousRange(range), targets, false);
+    const prev = summarize(all, previousRange(range), targets, false, thresholds);
     const d = (a: number | null, b: number | null) => (a !== null && b !== null ? a - b : null);
     delta = prev.count ? { sys: d(cur.sys.avg, prev.sys.avg), dia: d(cur.dia.avg, prev.dia.avg), pulse: d(cur.pulse.avg, prev.pulse.avg) } : null;
   }
+  const categories = { normal: 0, elevated: 0, high: 0 };
+  if (thresholds) for (const m of inc) categories[categorize(m.systolic, m.diastolic, thresholds)]++;
   return {
     count: inc.length,
+    categories,
     countAll: inR.length,
     days,
     ...cur,

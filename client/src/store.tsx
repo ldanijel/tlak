@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  COLLECTIONS, DEFAULT_SAFETY, type Collection, type CollectionMap, type Device, type HealthEvent, type Measurement, type Medication,
+  COLLECTIONS, DEFAULT_CATEGORIES, DEFAULT_SAFETY, type Collection, type CollectionMap, type Device, type HealthEvent, type Measurement, type Medication,
   type Settings, type SyncBase, type Target,
 } from './types.ts';
 import { clearAllData, getAll, getMeta, markAllDirty, putMany, setMeta, type Stored } from './db/idb.ts';
@@ -39,7 +39,7 @@ export interface Store {
 
 const defaultSettings = (): Settings => ({
   id: 'main', createdAt: new Date().toISOString(), updatedAt: new Date(0).toISOString(), deletedAt: null,
-  profileName: '', profileBirthYear: '', safety: { ...DEFAULT_SAFETY }, showChecklist: false, movingAverage: false,
+  profileName: '', profileBirthYear: '', safety: { ...DEFAULT_SAFETY }, categories: { ...DEFAULT_CATEGORIES }, showChecklist: false, movingAverage: false,
   sessionWindowMinutes: 10, backupReminderDays: 30,
 });
 
@@ -76,7 +76,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       devices: alive(devices),
       medications: alive(medications),
       events: alive(events).sort((a, b) => a.date.localeCompare(b.date)),
-      settings: s ? { ...defaultSettings(), ...(s as unknown as Settings), safety: { ...DEFAULT_SAFETY, ...(s as unknown as Settings).safety } } : defaultSettings(),
+      settings: s ? { ...defaultSettings(), ...(s as unknown as Settings), safety: { ...DEFAULT_SAFETY, ...(s as unknown as Settings).safety }, categories: { ...DEFAULT_CATEGORIES, ...((s as unknown as Settings).categories || {}) } } : defaultSettings(),
     });
     setLastBackupAt((await getMeta<string>('lastBackupAt')) ?? null);
   }, []);

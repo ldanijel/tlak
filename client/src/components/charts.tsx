@@ -31,6 +31,27 @@ export function MinAvgMaxBar({ label, min, avg, max, domain, color }: {
   );
 }
 
+/* ---------- Raspodjela po ESC kategorijama ---------- */
+export function CategoryBar({ counts }: { counts: { normal: number; elevated: number; high: number } }) {
+  const total = counts.normal + counts.elevated + counts.high;
+  if (!total) return null;
+  const pct = (n: number) => Math.round((n / total) * 100);
+  return (
+    <div>
+      <div className="catbar" role="img" aria-label={`Nepovišeni ${counts.normal}, povišeni ${counts.elevated}, visoki ${counts.high}`}>
+        <i className="n" style={{ width: `${(counts.normal / total) * 100}%` }} />
+        <i className="e" style={{ width: `${(counts.elevated / total) * 100}%` }} />
+        <i className="h" style={{ width: `${(counts.high / total) * 100}%` }} />
+      </div>
+      <div className="legend">
+        <span><i style={{ background: 'var(--cat-normal)' }} />● Nepovišeni {counts.normal} ({pct(counts.normal)} %)</span>
+        <span><i style={{ background: 'var(--cat-elevated)' }} />▲ Povišeni {counts.elevated} ({pct(counts.elevated)} %)</span>
+        <span><i style={{ background: 'var(--cat-high)' }} />■ Visoki {counts.high} ({pct(counts.high)} %)</span>
+      </div>
+    </div>
+  );
+}
+
 /* ---------- Vremenski graf ---------- */
 type SeriesKey = 'systolic' | 'diastolic' | 'pulse';
 interface Pt { t: number; v: number; m: Measurement; key: SeriesKey }

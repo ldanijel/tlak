@@ -6,6 +6,7 @@ import { ARM_LABEL, PERIOD_LABEL, POSITION_LABEL, SOURCE_LABEL, TIMING_LABEL } f
 import { classify, STATUS_LABEL, targetFor, boundsFor } from '../lib/targets.ts';
 import { groupSessions, meanArterialPressure, pulsePressure } from '../lib/stats.ts';
 import { Badge, Confirm, Message, useToast } from '../components/ui.tsx';
+import { categorize, CATEGORY_ICON, CATEGORY_LABEL, categoryRangeText } from '../lib/categories.ts';
 
 export function MeasurementDetailPage() {
   const { id } = useParams();
@@ -22,6 +23,7 @@ export function MeasurementDetailPage() {
   const bounds = boundsFor(targetFor(data.targets, m.measuredAt), m.period);
   const session = groupSessions(data.measurements.filter((x) => x.sessionId === m.sessionId || x.id === m.id), data.settings.sessionWindowMinutes).find((s) => s.measurements.some((x) => x.id === m.id));
   const critical = m.systolic >= data.settings.safety.sysCritical || m.diastolic >= data.settings.safety.diaCritical;
+  const cat = categorize(m.systolic, m.diastolic, data.settings.categories);
 
   const del = async () => {
     setConfirmDel(false);
@@ -51,8 +53,12 @@ export function MeasurementDetailPage() {
         </div>
         <p style={{ textAlign: 'center' }} className="tabular">{fmtDateTime(m.measuredAt)} · {PERIOD_LABEL[m.period]}</p>
         <div className="row" style={{ justifyContent: 'center' }}>
-          <Badge kind={status}>{status === 'in' ? '✓' : status === 'above' ? '↑' : status === 'below' ? '↓' : 'ⓘ'} {STATUS_LABEL[status]}</Badge>
-          {bounds && <span className="tiny">cilj {bounds.sysMin}–{bounds.sysMax}/{bounds.diaMin}–{bounds.diaMax}</span>}
+          <Badge kind={`cat-${cat} big`}>{CATEGORY_ICON[cat]} {CATEGORY_LABEL[cat]}</Badge>
+          <span className="tiny">{categoryRangeText(cat, data.settings.categories)}</span>
+        </div>
+        <div className="row" style={{ justifyContent: 'center', marginTop: 4 }}>
+          {status !== 'none' && <Badge kind={status}>{status === 'in' ? '✓' : status === 'above' ? '↑' : '↓'} {STATUS_LABEL[status]}</Badge>}
+          {bounds && <span className="tiny">osobni cilj {bounds.sysMin}–{bounds.sysMax}/{bounds.diaMin}–{bounds.diaMax}</span>}
           {!m.includedInAverage && <Badge kind="none">isključeno iz prosjeka</Badge>}
           {critical && <Badge kind="safety">🚨 vrlo visoko</Badge>}
         </div>

@@ -5,7 +5,7 @@ import { fmtNum, fmtDelta, toInputDate } from '../lib/format.ts';
 import { RANGE_LABEL, resolveRange, type RangeKey } from '../lib/periods.ts';
 import { summarize, groupSessions, analyzed } from '../lib/stats.ts';
 import { Badge, Segmented, useLocalStorage } from '../components/ui.tsx';
-import { TimeChart } from '../components/charts.tsx';
+import { CategoryBar, TimeChart } from '../components/charts.tsx';
 
 const RANGES: RangeKey[] = ['7d', '28d', '90d', '180d', '1y', 'all', 'custom'];
 
@@ -15,7 +15,7 @@ export function AnalysisPage() {
   const [custom, setCustom] = useState({ from: toInputDate(new Date(Date.now() - 27 * 86400e3)), to: toInputDate(new Date()) });
   const earliest = data.measurements.length ? new Date(data.measurements[data.measurements.length - 1].measuredAt) : null;
   const range = useMemo(() => resolveRange(rangeKey, new Date(), { from: new Date(custom.from), to: new Date(custom.to) }, earliest), [rangeKey, custom, earliest]);
-  const s = useMemo(() => summarize(data.measurements, range, data.targets), [data.measurements, range, data.targets]);
+  const s = useMemo(() => summarize(data.measurements, range, data.targets, true, data.settings.categories), [data.measurements, range, data.targets, data.settings.categories]);
   const sessions = useMemo(() => groupSessions(analyzed(data.measurements).filter((m) => { const t = new Date(m.measuredAt).getTime(); return t >= range.from.getTime() && t <= range.to.getTime(); }), data.settings.sessionWindowMinutes).filter((x) => x.measurements.length > 1), [data.measurements, range, data.settings.sessionWindowMinutes]);
   const pp = useMemo(() => { const l = analyzed(data.measurements).filter((m) => { const t = new Date(m.measuredAt).getTime(); return t >= range.from.getTime() && t <= range.to.getTime(); }); return l.length ? { pp: l.reduce((a, m) => a + m.systolic - m.diastolic, 0) / l.length, map: l.reduce((a, m) => a + m.diastolic + (m.systolic - m.diastolic) / 3, 0) / l.length } : null; }, [data.measurements, range]);
 
@@ -49,6 +49,12 @@ export function AnalysisPage() {
             <tr><th>Broj mjerenja</th><td className="n">{s.morningSys.n}</td><td className="n">{s.eveningSys.n}</td><td></td></tr>
           </tbody></table>
         )}
+      </section>
+
+      <section className="card">
+        <h2>Kategorije (ESC, kućno mjerenje)</h2>
+        <p className="tiny">Nepovišeni: SYS &lt; {data.settings.categories.elevatedSys} i DIA &lt; {data.settings.categories.elevatedDia} · Povišeni: SYS {data.settings.categories.elevatedSys}–{data.settings.categories.highSys - 1} ili DIA {data.settings.categories.elevatedDia}–{data.settings.categories.highDia - 1} · Visoki: SYS ≥ {data.settings.categories.highSys} ili DIA ≥ {data.settings.categories.highDia}. Lošija od dviju vrijednosti određuje kategoriju.</p>
+        {s.count ? <CategoryBar counts={s.categories} /> : <p className="muted">Nema mjerenja u razdoblju.</p>}
       </section>
 
       <section className="card">

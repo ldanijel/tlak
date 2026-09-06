@@ -78,3 +78,31 @@ export function parseReading(tokens: Token[], labels: Token[] = []): ParsedReadi
   if (systolic.value === null || diastolic.value === null || pulse.value === null) score *= 0.6;
   return { systolic, diastolic, pulse, score, warnings };
 }
+
+/**
+ * Očitanje jedne zone (SYS, DIA ili puls) koju je korisnik označio horizontalama:
+ * bira najveći čitljiv broj od 2–3 znamenke; spaja znamenke razdvojene u istom redu.
+ */
+export function parseBand(tokens: Token[], [lo, hi]: readonly [number, number]): FieldGuess {
+  const nums = tokens
+    .filter((t) => !/[:/.]/.test(t.text))
+    .map((t) => ({ ...t, clean: t.text.replace(/[^0-9]/g, ''), h: t.y1 - t.y0, cy: (t.y0 + t.y1) / 2 }))
+    .filter((t) => t.clean.length >= 1 && t.clean.length <= 3)
+    .sort((a, b) => a.x0 - b.x0);
+  if (!nums.length) return { value: null, confidence: 0, reason: 'nije prepoznato' };
+  const maxH = Math.max(...nums.map((n) => n.h));
+  const big = nums.filter((n) => n.h >= maxH * 0.6);
+  // spajanje susjednih tokena istog reda (npr. "1" + "28")
+  let text = '', conf = 100;
+  for (const n of big) { if ((text + n.clean).length > 3) break; text += n.clean; conf = Math.min(conf, n.conf); }
+  if (text.length < 2) {
+    const single = big.find((n) => n.clean.length >= 2);
+    if (!single) return { value: null, confidence: Math.round(conf), reason: 'nedovoljno znamenki' };
+    text = single.clean; conf = single.conf;
+  }
+  const value = Number(text);
+  const c = Math.round(conf);
+  if (value < lo || value > hi) return { value: null, confidence: c, reason: `izvan raspona (${value})` };
+  if (c < CONF_OK) return { value, confidence: c, reason: 'niska pouzdanost' };
+  return { value, confidence: c };
+}

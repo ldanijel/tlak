@@ -72,6 +72,16 @@ Kolekcije: `measurements`, `targets`, `devices`, `medications`, `events`, `setti
 source, period, sessionId, armLocation, bodyPosition, medicationTiming, deviceId, symptoms, tags, notes, includedInAverage, ocrConfidence,
 createdAt, updatedAt) i ostaje mapljiv na HealthKit/Health Connect.
 
+## Verzija 1.1
+
+- **Fotografija:** okvir za zaslon tlakomjera mijenja veličinu ručicama na sva četiri kuta i sva četiri ruba te se pomiče povlačenjem;
+  dvije žute horizontale (SYS | DIA | PULS) pomiču se neovisno. OCR više ne pogađa raspored po položaju, nego svaku od tri zone čita
+  zasebno (više varijanta predobrade, oba modela, bira se najpouzdanije očitanje).
+- **Kategorije tlaka (ESC, kućno mjerenje):** nepovišeni SYS < 120 i DIA < 70; povišeni SYS 120–134 ili DIA 70–84; visoki SYS ≥ 135 ili
+  DIA ≥ 85. Kategoriju određuje lošija od dviju vrijednosti (118/71 je „povišeni”). Prikaz zeleno/žuto/crveno uvijek uz tekst i simbol
+  (● ▲ ■). Pragovi su podesivi u Postavkama; raspodjela po kategorijama prikazuje se na Početnoj, u Analizi i u izvještaju; Povijest
+  ima filtar po kategoriji. Osobni ciljni raspon ostaje kao dodatna, neobvezna oznaka.
+
 ## Pokrivenost zahtjeva
 
 Faza 1 (MVP) – implementirano: instalabilna PWA; lokalna pohrana; ručni unos (numerička tipkovnica, SYS→DIA→puls→Spremi, prijedlog

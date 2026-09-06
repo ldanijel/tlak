@@ -7,7 +7,8 @@ import { summarize } from '../lib/stats.ts';
 import { classify, STATUS_LABEL } from '../lib/targets.ts';
 import { PERIOD_LABEL, SOURCE_LABEL } from '../lib/labels.ts';
 import { Badge, Segmented, useLocalStorage } from '../components/ui.tsx';
-import { MinAvgMaxBar } from '../components/charts.tsx';
+import { CategoryBar, MinAvgMaxBar } from '../components/charts.tsx';
+import { categorize, CATEGORY_ICON, CATEGORY_LABEL, categoryRangeText } from '../lib/categories.ts';
 
 const RANGES: RangeKey[] = ['7d', '28d', '90d', 'ytd', 'custom'];
 
@@ -16,7 +17,7 @@ export function HomePage() {
   const [rangeKey, setRangeKey] = useLocalStorage<RangeKey>('tlak.home.range', '7d');
   const [custom, setCustom] = useState({ from: toInputDate(new Date(Date.now() - 13 * 86400e3)), to: toInputDate(new Date()) });
   const range = useMemo(() => resolveRange(rangeKey, new Date(), { from: new Date(custom.from), to: new Date(custom.to) }), [rangeKey, custom]);
-  const s = useMemo(() => summarize(data.measurements, range, data.targets), [data.measurements, range, data.targets]);
+  const s = useMemo(() => summarize(data.measurements, range, data.targets, true, data.settings.categories), [data.measurements, range, data.targets, data.settings.categories]);
   const last = data.measurements[0];
   const backupDue = !lastBackupAt || Date.now() - new Date(lastBackupAt).getTime() > data.settings.backupReminderDays * 86400e3;
 
@@ -40,7 +41,8 @@ export function HomePage() {
               <span className="small muted tabular">{fmtDateTime(last.measuredAt)} · {PERIOD_LABEL[last.period]} · {SOURCE_LABEL[last.source]}</span>
             </div>
             <div className="row" style={{ marginTop: 6, justifyContent: 'center' }}>
-              {(() => { const st = classify(last, data.targets); return <Badge kind={st}>{st === 'in' ? '✓' : st === 'above' ? '↑' : st === 'below' ? '↓' : 'ⓘ'} {STATUS_LABEL[st]}</Badge>; })()}
+              {(() => { const c = categorize(last.systolic, last.diastolic, data.settings.categories); return <Badge kind={`cat-${c} big`} title={categoryRangeText(c, data.settings.categories)}>{CATEGORY_ICON[c]} {CATEGORY_LABEL[c]}</Badge>; })()}
+              {(() => { const st = classify(last, data.targets); return st === 'none' ? null : <Badge kind={st}>{st === 'in' ? '✓' : st === 'above' ? '↑' : '↓'} {STATUS_LABEL[st]}</Badge>; })()}
               {(last.systolic >= data.settings.safety.sysCritical || last.diastolic >= data.settings.safety.diaCritical) && <Badge kind="safety">🚨 vrlo visoko – ponovite mjerenje</Badge>}
               {(last.symptoms.length > 0 || last.notes) && <span className="small muted">{[...last.symptoms, last.notes].filter(Boolean).join(' · ')}</span>}
             </div>
@@ -75,6 +77,7 @@ export function HomePage() {
               <MinAvgMaxBar label="DIA" min={s.dia.min} avg={s.dia.avg} max={s.dia.max} domain={[40, 130]} color="var(--dia)" />
               <MinAvgMaxBar label="Puls" min={s.pulse.min} avg={s.pulse.avg} max={s.pulse.max} domain={[40, 140]} color="var(--pulse)" />
             </div>
+            <CategoryBar counts={s.categories} />
             <div className="grid3">
               <div className="stat"><div className="k">Prosjek (izračun)</div><div className="v tabular">{fmtNum(s.sys.avg)}/{fmtNum(s.dia.avg)} <small>mmHg</small></div></div>
               <div className="stat"><div className="k">Mjerenja</div><div className="v tabular">{s.count}{s.countAll !== s.count && <small> (+{s.countAll - s.count} isklj.)</small>}</div></div>

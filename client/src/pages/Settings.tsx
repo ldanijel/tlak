@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../store.tsx';
 import { fmtRelative } from '../lib/format.ts';
-import { DEFAULT_SAFETY } from '../types.ts';
+import { DEFAULT_CATEGORIES, DEFAULT_SAFETY } from '../types.ts';
 import { Field, Modal, useToast } from '../components/ui.tsx';
 import { clearPin, getLockCfg, setPin } from '../components/Lock.tsx';
 
@@ -14,6 +14,7 @@ export function SettingsPage() {
   const [pin, setPinVal] = useState(''); const [pin2, setPin2] = useState(''); const [autoLock, setAutoLock] = useState(5);
   const [lockCfg, setLockCfg] = useState(getLockCfg());
   const [safety, setSafety] = useState(s.safety);
+  const [cat, setCat] = useState(s.categories);
 
   const savePin = async () => {
     if (!/^\d{4}$/.test(pin) || pin !== pin2) { toast.show('PIN mora imati 4 znamenke i oba unosa moraju biti jednaka.'); return; }
@@ -46,6 +47,21 @@ export function SettingsPage() {
         <h2>Podaci za izvještaj</h2>
         <Field label="Ime i prezime (neobvezno)"><input value={s.profileName} onChange={(e) => void updateSettings({ profileName: e.target.value })} autoComplete="name" /></Field>
         <Field label="Godina rođenja (neobvezno)"><input inputMode="numeric" value={s.profileBirthYear} onChange={(e) => void updateSettings({ profileBirthYear: e.target.value.replace(/\D/g, '').slice(0, 4) })} /></Field>
+      </section>
+
+      <section className="card">
+        <h2>Kategorije tlaka (ESC)</h2>
+        <p className="tiny">Zadano prema ESC smjernicama za kućno mjerenje: nepovišeni &lt; 120/70, povišeni 120–134/70–84, visoki ≥ 135/85. Kategoriju određuje lošija od dviju vrijednosti (npr. 118/71 je povišeni zbog DIA).</p>
+        <div className="grid2">
+          <Field label="Povišeni – SYS od"><input type="number" value={cat.elevatedSys} onChange={(e) => setCat({ ...cat, elevatedSys: Number(e.target.value) })} /></Field>
+          <Field label="Povišeni – DIA od"><input type="number" value={cat.elevatedDia} onChange={(e) => setCat({ ...cat, elevatedDia: Number(e.target.value) })} /></Field>
+          <Field label="Visoki – SYS od"><input type="number" value={cat.highSys} onChange={(e) => setCat({ ...cat, highSys: Number(e.target.value) })} /></Field>
+          <Field label="Visoki – DIA od"><input type="number" value={cat.highDia} onChange={(e) => setCat({ ...cat, highDia: Number(e.target.value) })} /></Field>
+        </div>
+        <div className="row">
+          <button type="button" className="btn primary" onClick={() => { if (cat.elevatedSys >= cat.highSys || cat.elevatedDia >= cat.highDia) { toast.show('Prag „povišeni” mora biti manji od praga „visoki”.'); return; } void updateSettings({ categories: cat }); toast.show('Kategorije su spremljene.'); }}>Spremi kategorije</button>
+          <button type="button" className="btn" onClick={() => { setCat({ ...DEFAULT_CATEGORIES }); void updateSettings({ categories: { ...DEFAULT_CATEGORIES } }); }}>Vrati ESC zadano</button>
+        </div>
       </section>
 
       <section className="card">

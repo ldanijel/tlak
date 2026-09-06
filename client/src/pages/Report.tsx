@@ -8,7 +8,8 @@ import { makeBackup } from '../lib/backup.ts';
 import { shareOrDownload, stamp } from '../lib/share.ts';
 import { PERIOD_LABEL, SOURCE_LABEL, TIMING_LABEL, EVENT_LABEL } from '../lib/labels.ts';
 import { Segmented, useToast } from '../components/ui.tsx';
-import { TimeChart } from '../components/charts.tsx';
+import { CategoryBar, TimeChart } from '../components/charts.tsx';
+import { categorize, CATEGORY_SHORT } from '../lib/categories.ts';
 
 const RANGES: RangeKey[] = ['7d', '28d', '90d', '180d', '1y', 'all', 'custom'];
 
@@ -20,7 +21,7 @@ export function ReportPage() {
   const [opts, setOpts] = useState({ profile: true, chart: true, list: true, notes: true, therapy: true });
   const earliest = data.measurements.length ? new Date(data.measurements[data.measurements.length - 1].measuredAt) : null;
   const range = useMemo(() => resolveRange(rangeKey, new Date(), { from: new Date(custom.from), to: new Date(custom.to) }, earliest), [rangeKey, custom, earliest]);
-  const s = useMemo(() => summarize(data.measurements, range, data.targets), [data.measurements, range, data.targets]);
+  const s = useMemo(() => summarize(data.measurements, range, data.targets, true, data.settings.categories), [data.measurements, range, data.targets, data.settings.categories]);
   const list = useMemo(() => data.measurements.filter((m) => inRange(m.measuredAt, range)).slice().sort((a, b) => a.measuredAt.localeCompare(b.measuredAt)), [data.measurements, range]);
   const events = data.events.filter((e) => e.date >= toInputDate(range.from) && e.date <= toInputDate(range.to));
   const meds = data.medications.filter((m) => !m.endDate || m.endDate >= toInputDate(range.from));
@@ -73,6 +74,8 @@ export function ReportPage() {
             <tr><th>Večernji prosjek (n)</th><td className="n">{fmtNum(s.eveningSys.avg, 1)}/{fmtNum(s.eveningDia.avg, 1)} ({s.eveningSys.n})</td></tr>
             <tr><th>Udio unutar osobnog cilja</th><td className="n">{s.inTargetShare === null ? 'cilj nije postavljen' : `${Math.round(s.inTargetShare * 100)} %`}</td></tr>
           </tbody></table>
+          <p className="small" style={{ marginTop: 10 }}>Raspodjela po ESC kategorijama kućnog tlaka (nepovišeni &lt; {data.settings.categories.elevatedSys}/{data.settings.categories.elevatedDia}, povišeni {data.settings.categories.elevatedSys}–{data.settings.categories.highSys - 1}/{data.settings.categories.elevatedDia}–{data.settings.categories.highDia - 1}, visoki ≥ {data.settings.categories.highSys}/{data.settings.categories.highDia}; lošija vrijednost određuje kategoriju):</p>
+          <CategoryBar counts={s.categories} />
           {data.targets.length > 0 && <p className="tiny">Osobni ciljni rasponi: {data.targets.map((t) => `od ${fmtDate(t.effectiveFrom)}: ${t.sysMin}–${t.sysMax}/${t.diaMin}–${t.diaMax}${t.note ? ` (${t.note})` : ''}`).join('; ')}.</p>}
         </div>
         {opts.chart && (
@@ -94,9 +97,9 @@ export function ReportPage() {
           <div className="card">
             <h3>Pojedinačna mjerenja ({list.length})</h3>
             <div className="scroll-x"><table className="tbl">
-              <thead><tr><th>Datum</th><th>Vrijeme</th><th className="n">SYS</th><th className="n">DIA</th><th className="n">Puls</th><th>Razd.</th><th>Terapija</th><th>Izvor</th>{opts.notes && <th>Simptomi / bilješka</th>}<th>Prosjek</th></tr></thead>
+              <thead><tr><th>Datum</th><th>Vrijeme</th><th className="n">SYS</th><th className="n">DIA</th><th className="n">Puls</th><th>Kat.</th><th>Razd.</th><th>Terapija</th><th>Izvor</th>{opts.notes && <th>Simptomi / bilješka</th>}<th>Prosjek</th></tr></thead>
               <tbody>{list.map((m) => (
-                <tr key={m.id}><td className="tabular">{fmtDate(m.measuredAt)}</td><td className="tabular">{fmtTime(m.measuredAt)}</td><td className="n">{m.systolic}</td><td className="n">{m.diastolic}</td><td className="n">{m.pulse}</td>
+                <tr key={m.id}><td className="tabular">{fmtDate(m.measuredAt)}</td><td className="tabular">{fmtTime(m.measuredAt)}</td><td className="n">{m.systolic}</td><td className="n">{m.diastolic}</td><td className="n">{m.pulse}</td><td>{CATEGORY_SHORT[categorize(m.systolic, m.diastolic, data.settings.categories)]}</td>
                   <td>{PERIOD_LABEL[m.period]}</td><td>{m.medicationTiming === 'unknown' ? '–' : TIMING_LABEL[m.medicationTiming]}</td><td>{SOURCE_LABEL[m.source]}</td>
                   {opts.notes && <td>{[...m.symptoms, m.notes].filter(Boolean).join('; ')}</td>}
                   <td>{m.includedInAverage ? 'da' : `isključeno${m.exclusionReason ? ` (${m.exclusionReason})` : ''}`}</td></tr>

@@ -22,6 +22,9 @@
   --critical-bg: #fde3e4;
   --info-bg: #e5f0fb;
   --target-zone: rgba(42, 120, 214, 0.10);
+  --cat-normal: #1b7f1b; --cat-normal-bg: #dff3df;
+  --cat-elevated: #7a5a00; --cat-elevated-bg: #fff0b8;
+  --cat-high: #b3151e; --cat-high-bg: #fddcdc;
   --shadow: 0 1px 2px rgba(0,0,0,.06), 0 4px 12px rgba(0,0,0,.05);
   --radius: 14px;
   --nav-h: 64px;
@@ -58,6 +61,7 @@
   --bg: #111110; --surface: #1d1d1c; --surface-2: #2a2a28; --border: #3a3a37; --text: #ffffff; --text-2: #c3c2b7; --text-3: #8f8e86;
   --accent: #3987e5; --sys: #3987e5; --dia: #d95926; --pulse: #199e70; --good: #5fbf5f; --warn: #e0a54a; --serious: #f08a5d; --critical: #f07178;
   --good-bg: #17301a; --warn-bg: #3a2c12; --serious-bg: #3d2416; --critical-bg: #3d1a1d; --info-bg: #17263a; --target-zone: rgba(57,135,229,.16); --shadow: none;
+  --cat-normal: #7fdc7f; --cat-normal-bg: #163d16; --cat-elevated: #ffd75e; --cat-elevated-bg: #4a3a00; --cat-high: #ff8a8a; --cat-high-bg: #4d1418;
 }
 
 * { box-sizing: border-box; }
@@ -151,6 +155,13 @@ p { margin: .4rem 0; }
 .badge.none, .badge.info { background: var(--surface-2); color: var(--text-2); }
 .badge.check { background: var(--serious-bg); color: var(--serious); }
 .badge.safety, .badge.error { background: var(--critical-bg); color: var(--critical); }
+.badge.cat-normal { background: var(--cat-normal-bg); color: var(--cat-normal); border-color: var(--cat-normal); }
+.badge.cat-elevated { background: var(--cat-elevated-bg); color: var(--cat-elevated); border-color: var(--cat-elevated); }
+.badge.cat-high { background: var(--cat-high-bg); color: var(--cat-high); border-color: var(--cat-high); }
+.badge.big { font-size: .95rem; padding: 6px 12px; }
+.catbar { display: flex; height: 14px; border-radius: 7px; overflow: hidden; border: 1px solid var(--border); margin: 6px 0; }
+.catbar i { display: block; height: 100%; }
+.catbar i.n { background: var(--cat-normal); } .catbar i.e { background: var(--cat-elevated); } .catbar i.h { background: var(--cat-high); }
 .badge.calc { background: var(--surface-2); color: var(--text-3); font-weight: 500; }
 
 .msg { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; margin: 8px 0; border: 1px solid var(--border); }
@@ -231,9 +242,13 @@ p { margin: .4rem 0; }
 .crop .h { position: absolute; width: 44px; height: 44px; margin: -22px; }
 .crop .h::after { content: ""; position: absolute; inset: 12px; background: #fff; border-radius: 50%; border: 2px solid var(--accent); }
 .crop .h.tl { left: 0; top: 0; } .crop .h.tr { right: 0; top: 0; } .crop .h.bl { left: 0; bottom: 0; } .crop .h.br { right: 0; bottom: 0; }
-.crop .guide { position: absolute; inset: 0; display: grid; grid-template-rows: 1fr 1fr 1fr; pointer-events: none; }
-.crop .guide span { border-bottom: 1px dashed rgba(255,255,255,.5); font-size: .7rem; color: #fff; padding: 2px 4px; text-shadow: 0 0 3px #000; }
-.crop .guide span:last-child { border: 0; }
+.crop .h.t { left: 50%; top: 0; } .crop .h.b { left: 50%; bottom: 0; } .crop .h.l { left: 0; top: 50%; } .crop .h.r { right: 0; top: 50%; }
+.crop .h.t::after, .crop .h.b::after { border-radius: 6px; inset: 16px 8px; }
+.crop .h.l::after, .crop .h.r::after { border-radius: 6px; inset: 8px 16px; }
+.crop .band { position: absolute; left: 0; right: 0; pointer-events: none; font-size: .72rem; font-weight: 700; color: #fff; padding: 2px 6px; text-shadow: 0 0 3px #000, 0 0 3px #000; }
+.crop .div { position: absolute; left: 0; right: 0; height: 44px; margin-top: -22px; cursor: ns-resize; }
+.crop .div::before { content: ""; position: absolute; left: 0; right: 0; top: 21px; height: 2px; background: #ffd75e; box-shadow: 0 0 3px #000; }
+.crop .div::after { content: "⇅"; position: absolute; right: 6px; top: 8px; width: 28px; height: 28px; border-radius: 50%; background: #ffd75e; color: #000; font-size: 16px; text-align: center; line-height: 28px; }
 .progress { height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
 .progress i { display: block; height: 100%; background: var(--accent); transition: width .2s; }
 

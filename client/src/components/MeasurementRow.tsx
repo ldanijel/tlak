@@ -4,12 +4,14 @@ import { fmtDate, fmtTime } from '../lib/format.ts';
 import { PERIOD_LABEL, SOURCE_LABEL, TIMING_LABEL } from '../lib/labels.ts';
 import { classify, STATUS_LABEL } from '../lib/targets.ts';
 import { Badge } from './ui.tsx';
-import type { SafetyThresholds } from '../types.ts';
+import type { CategoryThresholds, SafetyThresholds } from '../types.ts';
+import { categorize, CATEGORY_ICON, CATEGORY_SHORT } from '../lib/categories.ts';
 
 const STATUS_ICON = { in: '✓', above: '↑', below: '↓', none: '' };
 
-export function MeasurementRow({ m, targets, safety }: { m: Measurement; targets: Target[]; safety: SafetyThresholds }) {
+export function MeasurementRow({ m, targets, safety, categories }: { m: Measurement; targets: Target[]; safety: SafetyThresholds; categories: CategoryThresholds }) {
   const status = classify(m, targets);
+  const cat = categorize(m.systolic, m.diastolic, categories);
   const critical = m.systolic >= safety.sysCritical || m.diastolic >= safety.diaCritical;
   return (
     <Link to={`/measurement/${m.id}`} className={`mrow ${m.includedInAverage ? '' : 'excluded'}`}>
@@ -27,6 +29,7 @@ export function MeasurementRow({ m, targets, safety }: { m: Measurement; targets
       </div>
       <div className="badges">
         {critical && <Badge kind="safety">🚨 vrlo visoko</Badge>}
+        <Badge kind={`cat-${cat}`}>{CATEGORY_ICON[cat]} {CATEGORY_SHORT[cat]}</Badge>
         {status !== 'none' && <Badge kind={status}>{STATUS_ICON[status]} {STATUS_LABEL[status]}</Badge>}
       </div>
     </Link>

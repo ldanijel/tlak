@@ -5,13 +5,14 @@ import { RANGE_LABEL, resolveRange, inRange, type RangeKey } from '../lib/period
 import { classify } from '../lib/targets.ts';
 import { MeasurementRow } from '../components/MeasurementRow.tsx';
 import { localDayKey, fmtDate } from '../lib/format.ts';
+import { categorize } from '../lib/categories.ts';
 
-type F = { range: RangeKey; period: string; timing: string; source: string; target: string; note: string; included: string };
+type F = { range: RangeKey; period: string; timing: string; source: string; target: string; note: string; included: string; category: string };
 
 export function HistoryPage() {
   const { data } = useStore();
   const [sp] = useSearchParams();
-  const [f, setF] = useState<F>({ range: (sp.get('range') as RangeKey) || 'all', period: '', timing: '', source: '', target: '', note: '', included: '' });
+  const [f, setF] = useState<F>({ range: (sp.get('range') as RangeKey) || 'all', period: '', timing: '', source: '', target: '', note: '', included: '', category: '' });
   const [limit, setLimit] = useState(100);
   const range = useMemo(() => resolveRange(f.range, new Date(), undefined, data.measurements.length ? new Date(data.measurements[data.measurements.length - 1].measuredAt) : null), [f.range, data.measurements]);
 
@@ -23,6 +24,7 @@ export function HistoryPage() {
     if (f.source === 'manual' && m.source !== 'manual') return false;
     if (f.source === 'photo' && !['camera', 'gallery'].includes(m.source)) return false;
     if (f.source === 'import' && m.source !== 'import') return false;
+    if (f.category && categorize(m.systolic, m.diastolic, data.settings.categories) !== f.category) return false;
     if (f.target) { const s = classify(m, data.targets); if (f.target === 'in' ? s !== 'in' : s === 'in' || s === 'none') return false; }
     if (f.note && !(m.notes || m.symptoms.length)) return false;
     if (f.included === 'yes' && !m.includedInAverage) return false;
@@ -50,6 +52,7 @@ export function HistoryPage() {
         {sel('period', [['', 'Jutro/večer: sve'], ['morning', 'Jutro'], ['evening', 'Večer'], ['other', 'Drugo']])}
         {sel('timing', [['', 'Terapija: sve'], ['before', 'Prije terapije'], ['after', 'Nakon terapije']])}
         {sel('source', [['', 'Izvor: svi'], ['manual', 'Ručni'], ['photo', 'Fotografija'], ['import', 'Uvoz']])}
+        {sel('category', [['', 'Kategorija: sve'], ['normal', 'Nepovišeni'], ['elevated', 'Povišeni'], ['high', 'Visoki']])}
         {sel('target', [['', 'Cilj: sve'], ['in', 'Unutar cilja'], ['out', 'Izvan cilja']])}
         {sel('note', [['', 'Bilješke: sve'], ['1', 'S bilješkom/simptomom']])}
         {sel('included', [['', 'Prosjek: sve'], ['yes', 'Uključeno'], ['no', 'Isključeno']])}
@@ -59,7 +62,7 @@ export function HistoryPage() {
       ) : groups.map(([day, ms]) => (
         <section key={day} className="card tight" aria-label={fmtDate(ms[0].measuredAt)}>
           <div className="tiny" style={{ padding: '2px 4px' }}>{fmtDate(ms[0].measuredAt)}</div>
-          <div className="list">{ms.map((m) => <MeasurementRow key={m.id} m={m} targets={data.targets} safety={data.settings.safety} />)}</div>
+          <div className="list">{ms.map((m) => <MeasurementRow key={m.id} m={m} targets={data.targets} safety={data.settings.safety} categories={data.settings.categories} />)}</div>
         </section>
       ))}
       {list.length > limit && <button type="button" className="btn block" onClick={() => setLimit(limit + 200)}>Prikaži još ({list.length - limit})</button>}

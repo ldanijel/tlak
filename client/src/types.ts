@@ -83,10 +83,21 @@ export interface SafetyThresholds {
   pulseLow: number;
 }
 
+/** Pragovi kategorija kućnog tlaka (zadano prema ESC smjernicama za kućno mjerenje). */
+export interface CategoryThresholds {
+  elevatedSys: number; // od ove vrijednosti: povišeni
+  elevatedDia: number;
+  highSys: number; // od ove vrijednosti: visoki
+  highDia: number;
+}
+
+export type BpCategory = 'normal' | 'elevated' | 'high';
+
 export interface Settings extends SyncBase {
   profileName: string;
   profileBirthYear: string;
   safety: SafetyThresholds;
+  categories: CategoryThresholds;
   showChecklist: boolean;
   movingAverage: boolean;
   sessionWindowMinutes: number;
@@ -114,6 +125,8 @@ export const DEFAULT_SAFETY: SafetyThresholds = {
   pulseHigh: 120,
   pulseLow: 45,
 };
+
+export const DEFAULT_CATEGORIES: CategoryThresholds = { elevatedSys: 120, elevatedDia: 70, highSys: 135, highDia: 85 };
 
 export const TECHNICAL_RANGE = {
   systolic: [50, 260],

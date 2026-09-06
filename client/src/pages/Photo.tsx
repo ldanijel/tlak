@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useStore } from '../store.tsx';
 import { exifDate, loadImage, toCanvas, cropRotate, type Rect } from '../ocr/image.ts';
-import { recognizeDisplay, warmUpOcr, type OcrResult } from '../ocr/recognize.ts';
+import { recognizeBands, warmUpOcr, type OcrResult } from '../ocr/recognize.ts';
 import { fmtDateTime, fromInputs, toInputDate, toInputTime, currentTimezone } from '../lib/format.ts';
 import { suggestPeriod } from '../lib/periods.ts';
 import { hasErrors, needsConfirm, validateDraft, type ValidationMessage } from '../lib/validation.ts';
@@ -21,6 +21,7 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
   const [source, setSource] = useState<HTMLCanvasElement | null>(null);
   const [rect, setRect] = useState<Rect>({ x: 0, y: 0, w: 0, h: 0 });
   const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
+  const [dividers, setDividers] = useState<[number, number]>([0.34, 0.67]);
   const [progress, setProgress] = useState({ stage: '', p: 0 });
   const [result, setResult] = useState<OcrResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +30,7 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
   const [date, setDate] = useState(toInputDate(new Date())), [time, setTime] = useState(toInputTime(new Date()));
   const [msgs, setMsgs] = useState<ValidationMessage[]>([]);
   const [confirmed, setConfirmed] = useState(false);
-  const drag = useRef<{ handle: string; sx: number; sy: number; r: Rect } | null>(null);
+  const drag = useRef<{ handle: string; sx: number; sy: number; r: Rect; d: [number, number] } | null>(null);
 
   useEffect(() => { void warmUpOcr(); }, []);
   useEffect(() => { if (stage === 'pick') inputRef.current?.click(); }, [stage, mode]);
@@ -43,6 +44,7 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
       setSource(c);
       setRect({ x: c.width * 0.15, y: c.height * 0.25, w: c.width * 0.7, h: c.height * 0.5 });
       setRotation(0);
+      setDividers([0.34, 0.67]);
       if (mode === 'gallery') {
         const d = await exifDate(file);
         if (d) { setDate(toInputDate(d)); setTime(toInputTime(d)); setDateSrc('exif'); }
@@ -58,8 +60,8 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
     if (!source) return;
     setStage('ocr');
     try {
-      const display = cropRotate(source, rect, rotation);
-      const r = await recognizeDisplay(display, (s, p) => setProgress({ stage: s, p }));
+      const display = cropRotate(source, rect, 0);
+      const r = await recognizeBands(display, dividers, (s, p) => setProgress({ stage: s, p }));
       setResult(r);
       setSys(r.systolic.value); setDia(r.diastolic.value); setPulse(r.pulse.value);
       setMsgs([]); setConfirmed(false);
@@ -94,8 +96,9 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
   const scale = () => (source && stageRef.current ? source.width / stageRef.current.clientWidth : 1);
   const onPointerDown = (handle: string) => (e: React.PointerEvent) => {
     e.preventDefault();
+    e.stopPropagation(); // ručice i horizontale ne smiju pokrenuti pomicanje cijelog okvira
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    drag.current = { handle, sx: e.clientX, sy: e.clientY, r: rect };
+    drag.current = { handle, sx: e.clientX, sy: e.clientY, r: rect, d: dividers };
   };
   const onPointerMove = (e: React.PointerEvent) => {
     if (!drag.current || !source) return;
@@ -103,14 +106,25 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
     const dx = (e.clientX - drag.current.sx) * k, dy = (e.clientY - drag.current.sy) * k;
     const r = { ...drag.current.r };
     const min = 40;
-    switch (drag.current.handle) {
-      case 'move': r.x += dx; r.y += dy; break;
-      case 'tl': r.x += dx; r.y += dy; r.w -= dx; r.h -= dy; break;
-      case 'tr': r.y += dy; r.w += dx; r.h -= dy; break;
-      case 'bl': r.x += dx; r.w -= dx; r.h += dy; break;
-      case 'br': r.w += dx; r.h += dy; break;
+    const h = drag.current.handle;
+    if (h === 'd1' || h === 'd2') {
+      // pomicanje unutarnjih horizontala (SYS | DIA | puls), uz minimalnu visinu zone 10 %
+      const frac = dy / r.h;
+      const d: [number, number] = [...drag.current.d] as [number, number];
+      if (h === 'd1') d[0] = Math.max(0.1, Math.min(d[1] - 0.1, drag.current.d[0] + frac));
+      else d[1] = Math.max(d[0] + 0.1, Math.min(0.9, drag.current.d[1] + frac));
+      setDividers(d);
+      return;
     }
-    if (r.w < min) r.w = min; if (r.h < min) r.h = min;
+    if (h.includes('l')) { r.x += dx; r.w -= dx; }
+    if (h.includes('r')) r.w += dx;
+    if (h.includes('t')) { r.y += dy; r.h -= dy; }
+    if (h.includes('b')) r.h += dy;
+    if (h === 'move') { r.x += dx; r.y += dy; }
+    if (r.w < min) { if (h.includes('l')) r.x = drag.current.r.x + drag.current.r.w - min; r.w = min; }
+    if (r.h < min) { if (h.includes('t')) r.y = drag.current.r.y + drag.current.r.h - min; r.h = min; }
+    // okvir ne smije izaći izvan fotografije
+    r.w = Math.min(r.w, source.width); r.h = Math.min(r.h, source.height);
     r.x = Math.max(0, Math.min(source.width - r.w, r.x)); r.y = Math.max(0, Math.min(source.height - r.h, r.y));
     setRect(r);
   };
@@ -135,18 +149,22 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
 
       {stage === 'crop' && source && (
         <div className="card">
-          <p className="small muted">Postavite okvir točno oko zaslona tlakomjera: gornji red SYS, srednji DIA, donji puls. Po potrebi zakrenite.</p>
+          <p className="small muted">Povucite rubove ili kutove okvira oko zaslona tlakomjera, a žute horizontale postavite tako da odvajaju redove SYS, DIA i puls. Svaka zona čita se zasebno.</p>
           <div className="photo-stage" ref={stageRef} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
             <CanvasView canvas={source} />
             {(() => { const k = 1 / scale(); return (
               <div className="crop" style={{ left: rect.x * k, top: rect.y * k, width: rect.w * k, height: rect.h * k }} onPointerDown={onPointerDown('move')}>
-                <div className="guide" aria-hidden="true"><span>SYS</span><span>DIA</span><span>PULS</span></div>
-                {['tl', 'tr', 'bl', 'br'].map((h) => <div key={h} className={`h ${h}`} onPointerDown={onPointerDown(h)} role="slider" aria-label={`Ručica ${h}`} />)}
+                <div className="band" style={{ top: 0 }} aria-hidden="true">SYS</div>
+                <div className="band" style={{ top: `${dividers[0] * 100}%` }} aria-hidden="true">DIA</div>
+                <div className="band" style={{ top: `${dividers[1] * 100}%` }} aria-hidden="true">PULS</div>
+                <div className="div" style={{ top: `${dividers[0] * 100}%` }} onPointerDown={onPointerDown('d1')} role="slider" aria-label="Granica SYS/DIA" aria-valuenow={Math.round(dividers[0] * 100)} />
+                <div className="div" style={{ top: `${dividers[1] * 100}%` }} onPointerDown={onPointerDown('d2')} role="slider" aria-label="Granica DIA/puls" aria-valuenow={Math.round(dividers[1] * 100)} />
+                {['tl', 'tr', 'bl', 'br', 't', 'b', 'l', 'r'].map((h) => <div key={h} className={`h ${h}`} onPointerDown={onPointerDown(h)} role="slider" aria-label={`Ručica ${h}`} />)}
               </div>
             ); })()}
           </div>
           <div className="row" style={{ marginTop: 10 }}>
-            <button type="button" className="btn" onClick={() => setRotation(((rotation + 90) % 360) as 0 | 90 | 180 | 270)}>↻ Zakreni ({rotation}°)</button>
+            <button type="button" className="btn" onClick={() => { const rot = cropRotate(source, { x: 0, y: 0, w: source.width, h: source.height }, 90); setSource(rot); setRotation(((rotation + 90) % 360) as 0 | 90 | 180 | 270); setRect({ x: rot.width * 0.15, y: rot.height * 0.25, w: rot.width * 0.7, h: rot.height * 0.5 }); }}>↻ Zakreni ({rotation}°)</button>
             <button type="button" className="btn" onClick={() => setStage('pick')}>{mode === 'camera' ? 'Ponovno fotografiraj' : 'Druga fotografija'}</button>
           </div>
           <button type="button" className="btn primary big" style={{ marginTop: 10 }} onClick={() => void runOcr()}>Prepoznaj vrijednosti</button>
