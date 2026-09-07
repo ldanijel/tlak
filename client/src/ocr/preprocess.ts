@@ -28,7 +28,7 @@ export function preprocess(src: HTMLCanvasElement, opts: { threshold?: boolean; 
 }
 
 /** Ista predobrada nad sivom slikom (bez canvasa) – koristi se i u Node ispitnom alatu. */
-export function preprocessGray(gray: Uint8ClampedArray, w: number, h: number, opts: { threshold?: boolean; adaptive?: boolean } = {}): { gray: Uint8ClampedArray; inverted: boolean; contrast: number } {
+export function preprocessGray(gray: Uint8ClampedArray, w: number, h: number, opts: { threshold?: boolean; adaptive?: boolean; closingWindow?: number } = {}): { gray: Uint8ClampedArray; inverted: boolean; contrast: number } {
   // median 3×3 protiv šuma
   const med = new Uint8ClampedArray(gray);
   const win = new Array<number>(9);
@@ -58,7 +58,7 @@ export function preprocessGray(gray: Uint8ClampedArray, w: number, h: number, op
   let out: Uint8ClampedArray<ArrayBuffer> = med;
   if (opts.adaptive) {
     // prozor ≈ 35 % visine zone: veći od debljine segmenta, manji od promjene osvjetljenja
-    out = sauvola(med, w, h, Math.max(9, Math.round(h * ADAPTIVE_WIN_FRAC) | 1), 0);
+    out = sauvola(med, w, h, opts.closingWindow ?? Math.max(9, Math.round(h * ADAPTIVE_WIN_FRAC) | 1), 0);
   } else if (opts.threshold) {
     const t = otsu(med);
     out = new Uint8ClampedArray(med.length);

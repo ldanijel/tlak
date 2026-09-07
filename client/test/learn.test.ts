@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
 import { segmentDigits, learn, classifyBand, emptyModel, modelReady, bitsToBase64, base64ToBits, decodeBandSevenSegment, GW, GH } from '../src/ocr/learn.ts';
 import { preprocessGray } from '../src/ocr/preprocess.ts';
+import { autoDetect } from '../src/ocr/autodetect.ts';
 
 /** Minimalni čitač 8-bitnog sivog PNG-a (testna slika seg.png generirana u skripti). */
 function readGrayPng(path: string): { w: number; h: number; gray: Uint8ClampedArray } {
@@ -82,4 +83,13 @@ test('dekoder segmenata bez učenja čita sintetičke znamenke', () => {
   assert.equal(decodeBandSevenSegment(segmentDigits(b0.ink, b0.w, b0.h), [50, 260]).value, 128);
   assert.equal(decodeBandSevenSegment(segmentDigits(b1.ink, b1.w, b1.h), [30, 160]).value, 82);
   assert.equal(decodeBandSevenSegment(segmentDigits(b2.ink, b2.w, b2.h), [25, 220]).value, 66);
+});
+
+test('automatsko pronalaženje redova znamenki na sintetičkoj slici', () => {
+  const img = readGrayPng(png);
+  const r = autoDetect(img.gray, img.w, img.h);
+  assert.ok(r, 'zaslon nije pronađen');
+  assert.equal(r!.values.systolic, 128);
+  assert.equal(r!.values.diastolic, 82);
+  assert.ok(r!.dividers[0] > 0.2 && r!.dividers[0] < 0.5);
 });

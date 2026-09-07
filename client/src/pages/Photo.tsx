@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useStore } from '../store.tsx';
 import { exifDate, loadImage, toCanvas, cropRotate, type Rect } from '../ocr/image.ts';
 import { recognizeBands, warmUpOcr, type OcrResult } from '../ocr/recognize.ts';
+import { autoDetect } from '../ocr/autodetect.ts';
 import { fmtDateTime, fromInputs, toInputDate, toInputTime, currentTimezone } from '../lib/format.ts';
 import { suggestPeriod } from '../lib/periods.ts';
 import { hasErrors, needsConfirm, validateDraft, type ValidationMessage } from '../lib/validation.ts';
@@ -31,6 +32,7 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
   const model: OcrModel | undefined = data.ocrModels.find((x) => x.deviceId === deviceId);
   const modelData: OcrModelData = model ? { samples: model.samples, variantWins: model.variantWins, photos: model.photos, layout: model.layout, positions: model.positions || {} } : emptyModel();
   const [layoutApplied, setLayoutApplied] = useState(false);
+  const [autoFound, setAutoFound] = useState<'auto' | 'memory' | null>(null);
   // Opcija: nakon spremanja odmah nova fotografija (serija mjerenja). Pamti se na ovom uređaju.
   const [series, setSeries] = useState<boolean>(() => { try { return localStorage.getItem('tlak.photoSeries') === '1'; } catch { return false; } });
   const toggleSeries = (v: boolean) => { setSeries(v); try { localStorage.setItem('tlak.photoSeries', v ? '1' : '0'); } catch { /* ignore */ } };
@@ -80,7 +82,21 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
       const c = toCanvas(img, 1600);
       setSource(c);
       setRotation(0);
+      // 1) automatsko pronalaženje redova znamenki na cijeloj fotografiji; 2) zapamćeni raspored; 3) ručni izrez
+      const found = detectDisplay(c);
+      if (found) {
+        setRect(found.rect); setDividers(found.dividers); setLayoutApplied(false); setAutoFound('auto');
+        void runOcrWith(c, found.rect, found.dividers);
+        return;
+      }
       applyLayout(c, model);
+      if (model?.layout) {
+        setAutoFound('memory');
+        const l = model.layout;
+        void runOcrWith(c, { x: l.rect.x * c.width, y: l.rect.y * c.height, w: l.rect.w * c.width, h: l.rect.h * c.height }, l.dividers);
+        return;
+      }
+      setAutoFound(null);
       if (mode === 'gallery') {
         const d = await exifDate(file);
         if (d) { setDate(toInputDate(d)); setTime(toInputTime(d)); setDateSrc('exif'); }
@@ -92,12 +108,28 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
     }
   };
 
-  const runOcr = async () => {
-    if (!source) return;
+  /** Sivi raster fotografije za automatsko pronalaženje zaslona. */
+  const detectDisplay = (c: HTMLCanvasElement): { rect: Rect; dividers: [number, number] } | null => {
+    try {
+      const d = c.getContext('2d', { willReadFrequently: true })!.getImageData(0, 0, c.width, c.height).data;
+      const gray = new Uint8ClampedArray(c.width * c.height);
+      for (let i = 0, j = 0; i < d.length; i += 4, j++) gray[j] = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000;
+      const r = autoDetect(gray, c.width, c.height);
+      if (!r) return null;
+      return { rect: { x: r.rect.x * c.width, y: r.rect.y * c.height, w: r.rect.w * c.width, h: r.rect.h * c.height }, dividers: r.dividers };
+    } catch (e) {
+      console.warn('autoDetect', e);
+      return null;
+    }
+  };
+
+  const runOcr = () => runOcrWith(source, rect, dividers);
+  const runOcrWith = async (src: HTMLCanvasElement | null, r0: Rect, div: [number, number]) => {
+    if (!src) return;
     setStage('ocr');
     try {
-      const display = cropRotate(source, rect, 0);
-      const r = await recognizeBands(display, dividers, (s, p) => setProgress({ stage: s, p }), modelData);
+      const display = cropRotate(src, r0, 0);
+      const r = await recognizeBands(display, div, (s, p) => setProgress({ stage: s, p }), modelData);
       if (r.dividers) setDividers(r.dividers); // horizontale privučene na prazne retke ostaju zapamćene
       setResult(r);
       setSys(r.systolic.value); setDia(r.diastolic.value); setPulse(r.pulse.value);
@@ -286,6 +318,7 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
       {stage === 'confirm' && result && (
         <form className="card" onSubmit={(e) => { e.preventDefault(); void onSave(); }}>
           <img src={result.preview} alt="Izrezani zaslon tlakomjera (obrađen)" style={{ width: '100%', borderRadius: 10, border: '1px solid var(--border)' }} />
+          {autoFound && <p className="tiny">{autoFound === 'auto' ? 'Zaslon je pronađen automatski na fotografiji.' : 'Korišten je zapamćeni raspored ovog tlakomjera.'} Ako izrez nije dobar, koristite „Ispravi izrez”.</p>}
           {(result.systolic.value === null || result.diastolic.value === null || result.pulse.value === null) && (
             <Message level="check">Neke vrijednosti nisu pouzdano prepoznate i nisu popunjene. Unesite ih ručno prema fotografiji.</Message>
           )}
