@@ -108,7 +108,8 @@ const scaleTo = (img, th) => { const f = Math.max(1, th / img.h); const tw = Mat
 const variantsOf = (band) => {
   const bin = (() => { const s = scaleTo(band, 320); const r = preprocessGray(s.gray, s.w, s.h, { threshold: true }); return { w: s.w, h: s.h, gray: r.gray }; })();
   const gray320 = (() => { const s = scaleTo(band, 320); const r = preprocessGray(s.gray, s.w, s.h, { threshold: false }); return { w: s.w, h: s.h, gray: r.gray }; })();
-  return { list: [['raw', band], ['gray320', gray320], ['bin320', bin]], bin };
+  const adaptive = (() => { const s = scaleTo(band, 320); const r = preprocessGray(s.gray, s.w, s.h, { adaptive: true }); return { w: s.w, h: s.h, gray: r.gray }; })();
+  return { list: [['raw', band], ['gray320', gray320], ['bin320', bin], ['adaptive320', adaptive]], bin: adaptive };
 };
 
 const files = existsSync(dir) ? readdirSync(dir).filter((f) => /\.(jpe?g|png)$/i.test(f)) : [];

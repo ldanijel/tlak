@@ -153,4 +153,7 @@ test('OCR zona: spajanje znamenki, raspon, pouzdanost', () => {
   assert.equal(parseBand([tok('612', 0)], [30, 160]).value, null);
   assert.equal(parseBand([tok('82', 0, 40)], [30, 160]).reason, 'niska pouzdanost');
   assert.equal(parseBand([], [30, 160]).value, null);
+  // ikona lijevo od broja (prepoznata kao znamenka) se odbacuje: uzimaju se najdesniji tokeni
+  assert.equal(parseBand([tok('8', 0), tok('90', 60)], [30, 160]).value, 90);
+  assert.equal(parseBand([tok('1', 0), tok('28', 34)], [50, 260]).value, 128);
 });

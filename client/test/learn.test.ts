@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
 import { segmentDigits, learn, classifyBand, emptyModel, modelReady, bitsToBase64, base64ToBits, GW, GH } from '../src/ocr/learn.ts';
+import { preprocessGray } from '../src/ocr/preprocess.ts';
 
 /** Minimalni čitač 8-bitnog sivog PNG-a (testna slika seg.png generirana u skripti). */
 function readGrayPng(path: string): { w: number; h: number; gray: Uint8ClampedArray } {
@@ -61,4 +62,16 @@ test('učenje i klasifikacija: nakon potvrde iste znamenke se prepoznaju sa 100 
 test('bitmapa: base64 kodiranje je reverzibilno', () => {
   const bits = new Uint8Array(GW * GH).map((_, i) => (i % 3 === 0 ? 1 : 0));
   assert.deepEqual([...base64ToBits(bitsToBase64(bits))], [...bits]);
+});
+
+test('adaptivna binarizacija: znamenke ostaju čitljive uz gradijent odsjaja', () => {
+  const img = readGrayPng(png);
+  // simulacija odsjaja: svjetlina raste slijeva nadesno, kontrast znamenki pada
+  const g = new Uint8ClampedArray(img.gray.length);
+  for (let y = 0; y < img.h; y++) for (let x = 0; x < img.w; x++) { const v = img.gray[y * img.w + x]; const bg = 140 + (x / img.w) * 100; g[y * img.w + x] = v < 128 ? bg - 60 : bg; }
+  const r = preprocessGray(g, img.w, img.h, { adaptive: true });
+  const y0 = 0, y1 = Math.round(img.h * 0.34);
+  const ink = new Uint8Array(img.w * (y1 - y0));
+  for (let y = y0; y < y1; y++) for (let x = 0; x < img.w; x++) ink[(y - y0) * img.w + x] = r.gray[y * img.w + x] < 128 ? 1 : 0;
+  assert.equal(segmentDigits(ink, img.w, y1 - y0).length, 3);
 });

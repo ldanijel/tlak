@@ -92,9 +92,19 @@ export function parseBand(tokens: Token[], [lo, hi]: readonly [number, number]):
   if (!nums.length) return { value: null, confidence: 0, reason: 'nije prepoznato' };
   const maxH = Math.max(...nums.map((n) => n.h));
   const big = nums.filter((n) => n.h >= maxH * 0.6);
-  // spajanje susjednih tokena istog reda (npr. "1" + "28")
+  // Brojevi su na LCD-u poravnati udesno, a ikone (ruka, srce) stoje lijevo od njih. Zato se grade
+  // kandidati od najdesnijih tokena (1, 2, 3 tokena) i bira najdulji koji je unutar raspona.
   let text = '', conf = 100;
-  for (const n of big) { if ((text + n.clean).length > 3) break; text += n.clean; conf = Math.min(conf, n.conf); }
+  let acc = '', accConf = 100;
+  for (let i = big.length - 1; i >= 0; i--) {
+    const n = big[i];
+    if ((n.clean + acc).length > 3) break;
+    if (acc && n.x1 < big[i + 1].x0 - n.h * 0.9) break; // prevelik razmak: lijevo više nije isti broj
+    acc = n.clean + acc; accConf = Math.min(accConf, n.conf);
+    const v = Number(acc);
+    if (acc.length >= 2 && v >= lo && v <= hi) { text = acc; conf = accConf; }
+  }
+  if (!text) { text = acc; conf = accConf; }
   if (text.length < 2) {
     const single = big.find((n) => n.clean.length >= 2);
     if (!single) return { value: null, confidence: Math.round(conf), reason: 'nedovoljno znamenki' };

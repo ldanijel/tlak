@@ -9,6 +9,8 @@ import { hasErrors, needsConfirm, validateDraft, type ValidationMessage } from '
 import { Message, NumberInput, useToast } from '../components/ui.tsx';
 import { emptyModel, learn, modelReady, sampleCount, type OcrModelData } from '../ocr/learn.ts';
 import type { OcrModel } from '../types.ts';
+import { shareOrDownload, stamp } from '../lib/share.ts';
+import { bitsToBase64 } from '../ocr/learn.ts';
 import { findSession } from './NewMeasurement.tsx';
 
 type Stage = 'pick' | 'crop' | 'ocr' | 'confirm';
@@ -194,6 +196,25 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
   };
   const onPointerUp = () => { drag.current = null; };
 
+  /** Paket za dijagnostiku: izrezani zaslon (umanjen), zone, prepoznati tokeni, glifovi i naučeni model. Bez cijele fotografije. */
+  const exportDiagnostics = async () => {
+    if (!result) return;
+    const pkg = {
+      app: 'tlak-ocr-diagnostics', version: 1, createdAt: new Date().toISOString(),
+      device: data.devices.find((d) => d.id === deviceId)?.name || null,
+      confirmed: { systolic: sys, diastolic: dia, pulse },
+      ocr: { systolic: result.systolic, diastolic: result.diastolic, pulse: result.pulse, engine: result.engine, warnings: result.warnings, variantWinner: result.variantWinner },
+      layout: { rect: source ? { x: rect.x / source.width, y: rect.y / source.height, w: rect.w / source.width, h: rect.h / source.height } : null, dividers },
+      tokens: result.debug.digits,
+      glyphs: result.glyphs.map((g) => g.map((x) => ({ x0: x.x0, x1: x.x1, y0: x.y0, y1: x.y1, bits: bitsToBase64(x.bits) }))),
+      bandDims: result.bandDims,
+      model: { samples: Object.fromEntries(Object.entries(modelData.samples).map(([k, v]) => [k, v.length])), photos: modelData.photos, positions: modelData.positions || {} },
+      images: result.diagnostics,
+    };
+    const r = await shareOrDownload(`tlak-ocr-dijagnostika-${stamp()}.json`, JSON.stringify(pkg), 'application/json');
+    toast.show(r === 'shared' ? 'Dijagnostika je podijeljena.' : 'Dijagnostika je preuzeta.');
+  };
+
   const conf = (k: 'systolic' | 'diastolic' | 'pulse') => result?.[k];
   const flag = (k: 'systolic' | 'diastolic' | 'pulse') => { const c = conf(k); return !c || c.value === null || c.confidence < 70; };
 
@@ -294,6 +315,7 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
             {series && <button type="button" className="btn" onClick={() => void onSave(false)}>Potvrdi i spremi (završi seriju)</button>}
             <button type="button" className="btn" onClick={() => setStage('crop')}>Ispravi izrez / ponovno prepoznaj</button>
             <button type="button" className="btn" onClick={() => { setSource(null); setResult(null); setStage('pick'); }}>{mode === 'camera' ? 'Ponovno fotografiraj' : 'Druga fotografija'}</button>
+            <button type="button" className="btn ghost small" onClick={() => void exportDiagnostics()}>Preuzmi dijagnostiku OCR-a (za podršku)</button>
             <Link to="/" className="btn ghost">Odustani</Link>
           </div>
         </form>

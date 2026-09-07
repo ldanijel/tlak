@@ -46,7 +46,7 @@ function tokensOf(page: { blocks: { paragraphs: { lines: { words: { text: string
   return out;
 }
 
-export interface OcrResult extends ParsedReading { engine: string; debug: { digits: Token[]; text: Token[] }; preview: string; glyphs: Glyph[][]; bandDims: BandDims[]; variantWinner: (string | null)[]; learned: boolean[]; alignmentWarnings: string[] }
+export interface OcrResult extends ParsedReading { engine: string; debug: { digits: Token[]; text: Token[] }; preview: string; glyphs: Glyph[][]; bandDims: BandDims[]; variantWinner: (string | null)[]; learned: boolean[]; alignmentWarnings: string[]; diagnostics: { display: string; bands: { raw: string; adaptive: string }[] } }
 
 /**
  * Prepoznaje SYS/DIA/puls s izrezanog zaslona tlakomjera. Obrada je u cijelosti lokalna.
@@ -88,7 +88,7 @@ export async function recognizeDisplay(display: HTMLCanvasElement, onProgress?: 
   results.sort((a, b) => b.parsed.score - a.parsed.score);
   const best = results[0];
   onProgress?.('Gotovo', 1);
-  return { ...best.parsed, engine: best.engine, debug: { digits: best.digits, text: best.text }, preview, glyphs: [], bandDims: [], variantWinner: [], learned: [], alignmentWarnings: [] };
+  return { ...best.parsed, engine: best.engine, debug: { digits: best.digits, text: best.text }, preview, glyphs: [], bandDims: [], variantWinner: [], learned: [], alignmentWarnings: [], diagnostics: { display: '', bands: [] } };
 }
 
 function sliceBand(src: HTMLCanvasElement, from: number, to: number): HTMLCanvasElement {
@@ -133,7 +133,8 @@ export async function recognizeBands(display: HTMLCanvasElement, dividers: [numb
   const variantWinner: (string | null)[] = [];
   const learned: boolean[] = [];
   let engineUsed = '';
-  const VARIANT_NAMES = ['raw', 'nearest2x', 'gray320', 'bin320'];
+  const VARIANT_NAMES = ['raw', 'nearest2x', 'gray320', 'bin320', 'adaptive320'];
+  const diagBands: { raw: string; adaptive: string }[] = [];
   for (let i = 0; i < 3; i++) {
     onProgress?.(`Čitanje: ${names[i]}`, 0.3 + i * 0.22);
     const band = sliceBand(display, bounds[i][0], bounds[i][1]);
@@ -143,11 +144,13 @@ export async function recognizeBands(display: HTMLCanvasElement, dividers: [numb
       scaleNearest(band, band.height < 200 ? 2 : 1),
       preprocess(band, { threshold: false, targetHeight: 320 }).canvas,
       preprocess(band, { threshold: true, targetHeight: 320 }).canvas,
+      preprocess(band, { adaptive: true, targetHeight: 320 }).canvas,
     ];
+    diagBands.push({ raw: band.toDataURL('image/jpeg', 0.7), adaptive: variants[4].toDataURL('image/png') });
     let best: FieldGuess = { value: null, confidence: 0, reason: 'nije prepoznato' };
     let bestVariant: string | null = null;
-    // naučeni predlošci ovog tlakomjera: segmentacija znamenki iz binarizirane zone
-    const bin = variants[3];
+    // naučeni predlošci ovog tlakomjera: segmentacija znamenki iz adaptivno binarizirane zone (otporno na odsjaj)
+    const bin = variants[4];
     const bctx = bin.getContext('2d', { willReadFrequently: true })!;
     const bd = bctx.getImageData(0, 0, bin.width, bin.height).data;
     const gray = new Uint8ClampedArray(bin.width * bin.height);
@@ -194,7 +197,12 @@ export async function recognizeBands(display: HTMLCanvasElement, dividers: [numb
   onProgress?.('Gotovo', 1);
   const preview = preprocess(display, { threshold: false, targetHeight: 400 }).canvas.toDataURL('image/png');
   (window as unknown as { __ocrDebug?: unknown }).__ocrDebug = { guesses, tokens: debugTokens, glyphs: glyphsPerBand.map((g) => g.map((x) => [x.x0, x.x1, x.y0, x.y1])), bandSizes: bounds.map(([a, b]) => [Math.round(display.height * a), Math.round(display.height * b)]) };
-  return { systolic, diastolic, pulse, score: (systolic.confidence + diastolic.confidence + pulse.confidence) / 3, warnings: [...alignmentWarnings, ...warnings], engine: learned.some(Boolean) ? `${engineUsed || workers[0].name} + naučeni model` : engineUsed || workers[0].name, debug: { digits: debugTokens, text: [] }, preview, glyphs: glyphsPerBand, bandDims, variantWinner, learned, alignmentWarnings };
+  const small = document.createElement('canvas');
+  const sf = Math.min(1, 800 / Math.max(display.width, display.height));
+  small.width = Math.round(display.width * sf); small.height = Math.round(display.height * sf);
+  small.getContext('2d')!.drawImage(display, 0, 0, small.width, small.height);
+  const diagnostics = { display: small.toDataURL('image/jpeg', 0.8), bands: diagBands };
+  return { systolic, diastolic, pulse, score: (systolic.confidence + diastolic.confidence + pulse.confidence) / 3, warnings: [...alignmentWarnings, ...warnings], engine: learned.some(Boolean) ? `${engineUsed || workers[0].name} + naučeni model` : engineUsed || workers[0].name, debug: { digits: debugTokens, text: [] }, preview, glyphs: glyphsPerBand, bandDims, variantWinner, learned, alignmentWarnings, diagnostics };
 }
 
 export async function warmUpOcr(): Promise<void> {

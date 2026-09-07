@@ -4,7 +4,7 @@
  */
 export interface PreprocessResult { canvas: HTMLCanvasElement; inverted: boolean; contrast: number }
 
-export function preprocess(src: HTMLCanvasElement, opts: { threshold?: boolean; targetHeight?: number } = {}): PreprocessResult {
+export function preprocess(src: HTMLCanvasElement, opts: { threshold?: boolean; adaptive?: boolean; targetHeight?: number } = {}): PreprocessResult {
   const targetH = opts.targetHeight ?? 400;
   const scale = Math.max(1, targetH / src.height);
   const w = Math.round(src.width * scale), h = Math.round(src.height * scale);
@@ -17,14 +17,14 @@ export function preprocess(src: HTMLCanvasElement, opts: { threshold?: boolean; 
   const d = img.data;
   const gray = new Uint8ClampedArray(w * h);
   for (let i = 0, j = 0; i < d.length; i += 4, j++) gray[j] = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000;
-  const r = preprocessGray(gray, w, h, { threshold: opts.threshold });
+  const r = preprocessGray(gray, w, h, { threshold: opts.threshold, adaptive: opts.adaptive });
   for (let i = 0, j = 0; i < d.length; i += 4, j++) { d[i] = d[i + 1] = d[i + 2] = r.gray[j]; d[i + 3] = 255; }
   ctx.putImageData(img, 0, 0);
   return { canvas: c, inverted: r.inverted, contrast: r.contrast };
 }
 
 /** Ista predobrada nad sivom slikom (bez canvasa) – koristi se i u Node ispitnom alatu. */
-export function preprocessGray(gray: Uint8ClampedArray, w: number, h: number, opts: { threshold?: boolean } = {}): { gray: Uint8ClampedArray; inverted: boolean; contrast: number } {
+export function preprocessGray(gray: Uint8ClampedArray, w: number, h: number, opts: { threshold?: boolean; adaptive?: boolean } = {}): { gray: Uint8ClampedArray; inverted: boolean; contrast: number } {
   // median 3×3 protiv šuma
   const med = new Uint8ClampedArray(gray);
   const win = new Array<number>(9);
@@ -49,8 +49,11 @@ export function preprocessGray(gray: Uint8ClampedArray, w: number, h: number, op
   for (const v of med) sum += v;
   const inverted = sum / med.length < 110;
   if (inverted) for (let i = 0; i < med.length; i++) med[i] = 255 - med[i];
-  let out = med;
-  if (opts.threshold) {
+  let out: Uint8ClampedArray<ArrayBuffer> = med;
+  if (opts.adaptive) {
+    // prozor ≈ 35 % visine zone: veći od debljine segmenta, manji od promjene osvjetljenja
+    out = sauvola(med, w, h, Math.max(9, Math.round(h * 0.35) | 1), 0);
+  } else if (opts.threshold) {
     const t = otsu(med);
     out = new Uint8ClampedArray(med.length);
     for (let i = 0; i < med.length; i++) out[i] = med[i] > t ? 255 : 0;
@@ -58,7 +61,35 @@ export function preprocessGray(gray: Uint8ClampedArray, w: number, h: number, op
   return { gray: out, inverted, contrast: range / 255 };
 }
 
-/** Skaliranje sive slike (prosjek područja pri smanjenju, bilinearno pri povećanju). */
+/**
+ * Adaptivna binarizacija oduzimanjem pozadine („top-hat”): pozadina se procijeni lokalnim maksimumom
+ * (svijetla podloga popuni tanke tamne segmente), pa se binarizira razlika pozadina − piksel.
+ * Otporno na odsjaj i nejednako osvjetljenje LCD zaslona, za razliku od globalnog praga.
+ */
+export function sauvola(gray: Uint8ClampedArray, w: number, h: number, win: number, _k: number): Uint8ClampedArray<ArrayBuffer> {
+  void _k;
+  const r = Math.max(2, win >> 1);
+  // razdvojivi 1D max-filtar: po redovima pa po stupcima
+  const tmp = new Uint8ClampedArray(w * h), bg = new Uint8ClampedArray(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let m = 0;
+    for (let dx = -r; dx <= r; dx++) { const xx = x + dx; if (xx >= 0 && xx < w) { const v = gray[y * w + xx]; if (v > m) m = v; } }
+    tmp[y * w + x] = m;
+  }
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let m = 0;
+    for (let dy = -r; dy <= r; dy++) { const yy = y + dy; if (yy >= 0 && yy < h) { const v = tmp[yy * w + x]; if (v > m) m = v; } }
+    bg[y * w + x] = m;
+  }
+  const diff = new Uint8ClampedArray(w * h);
+  for (let i = 0; i < diff.length; i++) diff[i] = Math.max(0, bg[i] - gray[i]);
+  let t = otsu(diff);
+  if (t < 12) t = 255; // nema stvarne tinte: sve bijelo
+  const out = new Uint8ClampedArray(w * h);
+  for (let i = 0; i < diff.length; i++) out[i] = diff[i] > t ? 0 : 255;
+  return out;
+}
+
 export function scaleGray(gray: Uint8ClampedArray, w: number, h: number, tw: number, th: number): Uint8ClampedArray {
   const out = new Uint8ClampedArray(tw * th);
   for (let y = 0; y < th; y++) {
