@@ -5,6 +5,7 @@ import { fmtRelative } from '../lib/format.ts';
 import { DEFAULT_CATEGORIES, DEFAULT_SAFETY } from '../types.ts';
 import { Confirm, Field, Modal, useToast } from '../components/ui.tsx';
 import { useNavigate } from 'react-router-dom';
+import { syncNow } from '../sync/sync.ts';
 import { clearPin, getLockCfg, setPin } from '../components/Lock.tsx';
 
 export function SettingsPage() {
@@ -108,8 +109,8 @@ export function SettingsPage() {
       </section>
 
       {resetOpen && (
-        <Confirm title="Tvornički reset" confirmLabel="Obriši sve na ovom uređaju" danger onConfirm={() => { if (resetWord.trim().toUpperCase() !== 'RESET') { toast.show('Upišite RESET za potvrdu.'); return; } setResetOpen(false); void factoryReset().then(() => { toast.show('Uređaj je vraćen na početno stanje.'); nav('/'); }); }} onCancel={() => setResetOpen(false)}>
-          <p className="small">{auth ? `Prijavljeni ste kao ${auth.email}; podaci na računu ostaju.` : 'Niste prijavljeni: lokalni podaci bit će trajno izbrisani.'} {data.measurements.length} mjerenja na ovom uređaju.</p>
+        <Confirm title="Tvornički reset" confirmLabel="Obriši sve na ovom uređaju" danger onConfirm={() => { if (resetWord.trim().toUpperCase() !== 'RESET') { toast.show('Upišite RESET za potvrdu.'); return; } void (async () => { if (auth) { const ok = await syncNow(); if (!ok) { toast.show('Sinkronizacija nije uspjela; reset je otkazan da se ne izgube nesinkronizirane promjene. Pokušajte s mrežom.'); return; } } setResetOpen(false); await factoryReset(); toast.show('Uređaj je vraćen na početno stanje.'); nav('/'); })(); }} onCancel={() => setResetOpen(false)}>
+          <p className="small">{auth ? `Prijavljeni ste kao ${auth.email}; mjerenja i naučeni OCR ostaju na računu i vraćaju se prijavom. Prije brisanja aplikacija će sinkronizirati promjene.` : 'Niste prijavljeni: lokalna mjerenja i naučeni OCR bit će trajno izbrisani.'} {data.measurements.length} mjerenja na ovom uređaju.</p>
           <Field label="Za potvrdu upišite RESET"><input value={resetWord} onChange={(e) => setResetWord(e.target.value)} autoComplete="off" /></Field>
         </Confirm>
       )}
