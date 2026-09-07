@@ -175,6 +175,8 @@ createdAt, updatedAt) i ostaje mapljiv na HealthKit/Health Connect.
   kao „prevelike”); unutrašnjost okvira produžuje se prema dolje za 60 % visine. Vrijednosti koje je auto-detekcija
   sama dekodirala ulaze kao prijedlog (60 %) gdje glavni cjevovod ne pročita polje, umjesto slanja na ručni izrez.
   Šesti trajni primjer: `132-88-81.jpg`.
+- Savjet o udaljenosti: kad je automatski pronađeni zaslon uži od trećine širine kadra, ekran potvrde (i ručni izrez)
+  pokazuje poruku s postotkom i uputom da se pri sljedećem snimanju približi; pri dobrom kadru poruke nema.
 - Inverzija polariteta samo kad je uz nisku srednju svjetlinu i svijetli rep histograma jači od tamnog: tamni LCD u
   sjeni (BM38, zona pulsa) s još tamnijim znamenkama više se ne invertira (prije je to zonu pulsa pretvaralo u mrlje).
 - Nakon rezanja svijetlog ruba (`trimDisplay`) horizontale se preračunaju na novu visinu.

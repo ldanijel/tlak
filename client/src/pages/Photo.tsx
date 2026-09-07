@@ -50,6 +50,8 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
   /** Podrijetlo trenutačnog izreza: automatski, zapamćeni raspored ili ručno postavljen. */
   const [origin, setOrigin] = useState<'auto' | 'memory' | 'manual'>('manual');
   const [autoNotice, setAutoNotice] = useState<string | null>(null);
+  /** Savjet o udaljenosti: samo kad je pronađeni zaslon uži od trećine kadra (sitne znamenke pulsa). */
+  const [farNotice, setFarNotice] = useState<string | null>(null);
   const autoInfo = useRef<unknown>(null);
   /** Trag automatskih pokušaja (za dijagnostiku): što je auto-detekcija našla i zašto je koji pokušaj odbačen. */
   const autoTrace = useRef<unknown[]>([]);
@@ -115,6 +117,7 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
       const attempts: { origin: 'auto' | 'memory'; rect: Rect; dividers: [number, number]; values?: { systolic: number | null; diastolic: number | null; pulse: number | null } }[] = [];
       autoTrace.current = [];
       const found = detectDisplay(c);
+      setFarNotice(found && found.rows >= 2 && found.rect.w < c.width * 0.33 ? `Zaslon zauzima samo ${Math.round((found.rect.w / c.width) * 100)} % širine kadra, pa su brojke pulsa sitne. Pri sljedećem snimanju približite se tako da zaslon zauzme bar trećinu širine.` : null);
       autoTrace.current.push({ step: 'autoDetect', found: found ? { rows: found.rows, rect: { x: found.rect.x / c.width, y: found.rect.y / c.height, w: found.rect.w / c.width, h: found.rect.h / c.height }, dividers: found.dividers } : null });
       if (found && found.rows >= 2) attempts.push({ origin: 'auto', rect: found.rect, dividers: found.dividers, values: found.values });
       if (model?.layout) {
@@ -358,6 +361,7 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
         <div className="card">
           {devicePicker}
           {autoNotice && <Message level="check">{autoNotice}</Message>}
+          {farNotice && <Message level="check">{farNotice}</Message>}
           <p className="small muted">{layoutApplied ? 'Okvir i horizontale postavljeni su prema prošlom čitanju ovog tlakomjera; po potrebi ih prilagodite.' : 'Povucite rubove ili kutove okvira oko zaslona tlakomjera, a žute horizontale postavite tako da odvajaju redove SYS, DIA i puls. Svaka zona čita se zasebno.'}</p>
           <div className="photo-stage" ref={stageRef} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
             <CanvasView canvas={source} />
@@ -391,6 +395,7 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
       {stage === 'confirm' && result && (
         <form className="card" onSubmit={(e) => { e.preventDefault(); void onSave(); }}>
           <img src={result.preview} alt="Izrezani zaslon tlakomjera (obrađen)" style={{ width: '100%', borderRadius: 10, border: '1px solid var(--border)' }} />
+          {farNotice && <Message level="check">{farNotice}</Message>}
           {autoFound && <p className="tiny">{autoFound === 'auto' ? 'Zaslon je pronađen automatski na fotografiji.' : 'Korišten je zapamćeni raspored ovog tlakomjera.'} Provjerite obrađeni izrez iznad: ako brojke nisu jasno vidljive, koristite „Ispravi izrez”.</p>}
           {(result.systolic.value === null || result.diastolic.value === null || result.pulse.value === null) && (
             <Message level="check">Neke vrijednosti nisu pouzdano prepoznate i nisu popunjene. Unesite ih ručno prema fotografiji.</Message>
