@@ -108,7 +108,7 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
       // Svaki automatski pokušaj prolazi samo ako su SYS i DIA pouzdano pročitani; inače slijedi idući korak.
       const attempts: { origin: 'auto' | 'memory'; rect: Rect; dividers: [number, number] }[] = [];
       const found = detectDisplay(c);
-      if (found) attempts.push({ origin: 'auto', rect: found.rect, dividers: found.dividers });
+      if (found && found.rows >= 2) attempts.push({ origin: 'auto', rect: found.rect, dividers: found.dividers });
       if (model?.layout) {
         const l = model.layout;
         attempts.push({ origin: 'memory', rect: { x: l.rect.x * c.width, y: l.rect.y * c.height, w: l.rect.w * c.width, h: l.rect.h * c.height }, dividers: l.dividers });
@@ -124,6 +124,10 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
         const a = attempts[0];
         setRect(a.rect); setDividers(a.dividers); setLayoutApplied(false);
         setAutoNotice(a.origin === 'auto' ? 'Automatski izrez nije dao pouzdano očitanje, zato provjerite i prilagodite okvir i horizontale.' : 'Zapamćeni raspored nije dao pouzdano očitanje, zato prilagodite okvir i horizontale.');
+      } else if (found) {
+        // znamenke nisu pročitane, ali je okvir zaslona pronađen: on je početni okvir za ručni izrez
+        setRect(found.rect); setDividers(found.dividers); setLayoutApplied(false);
+        setAutoNotice('Zaslon je pronađen, ali znamenke nisu pročitane automatski. Provjerite okvir i horizontale pa pokrenite prepoznavanje.');
       } else applyLayout(c, model);
       setStage('crop');
     } catch (e) {
@@ -132,7 +136,7 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
   };
 
   /** Sivi raster fotografije za automatsko pronalaženje zaslona. */
-  const detectDisplay = (c: HTMLCanvasElement): { rect: Rect; dividers: [number, number] } | null => {
+  const detectDisplay = (c: HTMLCanvasElement): { rect: Rect; dividers: [number, number]; rows: number } | null => {
     try {
       const d = c.getContext('2d', { willReadFrequently: true })!.getImageData(0, 0, c.width, c.height).data;
       const gray = new Uint8ClampedArray(c.width * c.height);
@@ -140,7 +144,7 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
       autoInfo.current = null;
       const r = autoDetect(gray, c.width, c.height, (info) => { autoInfo.current = info; });
       if (!r) return null;
-      return { rect: { x: r.rect.x * c.width, y: r.rect.y * c.height, w: r.rect.w * c.width, h: r.rect.h * c.height }, dividers: r.dividers };
+      return { rect: { x: r.rect.x * c.width, y: r.rect.y * c.height, w: r.rect.w * c.width, h: r.rect.h * c.height }, dividers: r.dividers, rows: r.rows };
     } catch (e) {
       console.warn('autoDetect', e);
       return null;

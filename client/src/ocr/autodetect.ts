@@ -11,11 +11,12 @@ export interface AutoDetectResult {
   rect: { x: number; y: number; w: number; h: number }; // udjeli slike
   dividers: [number, number];
   values: { systolic: number | null; diastolic: number | null; pulse: number | null };
-  rows: number; // koliko redova znamenki je nađeno (3 = potpuno)
+  rows: number; // koliko redova znamenki je nađeno (3 = potpuno; 0 = samo okvir zaslona, bez očitanja)
   confidence: number;
 }
 
 interface Box { x0: number; y0: number; x1: number; y1: number; area: number }
+interface RowRead { boxes: (Box & { digit: string })[]; value: number; y0: number; y1: number; height: number }
 
 /** Povezane komponente (8-susjedstvo) nad binarnom slikom; vraća okvire s površinom tinte. */
 export function connectedComponents(ink: Uint8Array, w: number, h: number, minArea = 8): Box[] {
@@ -71,14 +72,17 @@ export function autoDetect(gray: Uint8ClampedArray, w: number, h: number, debug?
   const sw = Math.round(w * scale), sh = Math.round(h * scale);
   const g = scale < 1 ? scaleGray(gray, w, h, sw, sh) : gray;
   // više mjerila prozora zatvaranja (debljina segmenta ovisi o udaljenosti fotografiranja); prvi potpun rezultat pobjeđuje
-  let best: AutoDetectResult | null = null;
+  const state: { best: AutoDetectResult | null } = { best: null };
   const frames: Box[] = [];
+  const consider = (r: AutoDetectResult | null) => { if (r && (!state.best || r.rows > state.best.rows)) state.best = r; };
+  const done = () => state.best !== null && state.best.rows === 3;
+  let acc: RowRead[] = [];
   for (const frac of [0.06, 0.09, 0.04]) {
-    const r = detectAt(g, sw, sh, frac, debug, frames);
-    if (r && (!best || r.rows > best.rows)) best = r;
-    if (best && best.rows === 3) break;
+    acc = mergeReads([...acc, ...readsAt(g, sw, sh, frac, debug, frames)]);
+    consider(choose(acc, sw, sh));
+    if (done()) break;
   }
-  if (best && best.rows === 3) return clip(best);
+  if (done()) return clip(state.best!);
   // Drugi pokušaj: unutar okvira zaslona. Na cijeloj fotografiji prag tinte određuju najtamniji dijelovi
   // (crijevo, sjene), pa sivi LCD sa znamenkama slabijeg kontrasta ispadne razlomljen, a rub zaslona
   // se spoji sa znamenkama. Velika šuplja komponenta (okvir zaslona) zato se obrađuje iznutra, s vlastitim pragom.
@@ -92,15 +96,20 @@ export function autoDetect(gray: Uint8ClampedArray, w: number, h: number, debug?
     if (cw < sw * 0.1 || ch < sh * 0.1) continue;
     const crop = new Uint8ClampedArray(cw * ch);
     for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) crop[y * cw + x] = g[(cy0 + y) * sw + cx0 + x];
+    let facc: RowRead[] = [];
     for (const frac of [0.08, 0.12, 0.05]) {
-      const r = detectAt(crop, cw, ch, frac, debug ? (info) => debug({ frame: [f.x0, f.y0, f.x1, f.y1], ...(info as object) }) : undefined, undefined, true);
+      facc = mergeReads([...facc, ...readsAt(crop, cw, ch, frac, debug ? (info) => debug({ frame: [f.x0, f.y0, f.x1, f.y1], ...(info as object) }) : undefined, undefined, true)]);
+      const r = choose(facc, cw, ch);
       if (!r) continue;
-      const mapped: AutoDetectResult = { ...r, rect: { x: (cx0 + r.rect.x * cw) / sw, y: (cy0 + r.rect.y * ch) / sh, w: (r.rect.w * cw) / sw, h: (r.rect.h * ch) / sh } };
-      if (!best || mapped.rows > best.rows) best = mapped;
-      if (best.rows === 3) return clip(best);
+      consider({ ...r, rect: { x: (cx0 + r.rect.x * cw) / sw, y: (cy0 + r.rect.y * ch) / sh, w: (r.rect.w * cw) / sw, h: (r.rect.h * ch) / sh } });
+      if (done()) return clip(state.best!);
     }
   }
-  return best && clip(best);
+  if (state.best) return clip(state.best);
+  // Ništa pročitano, ali okvir zaslona postoji: vraća se kao početni okvir za ručni izrez (rows = 0).
+  const f = uniq[0];
+  if (f) return clip({ rect: { x: f.x0 / sw, y: f.y0 / sh, w: (f.x1 - f.x0 + 1) / sw, h: (f.y1 - f.y0 + 1) / sh }, dividers: [0.4, 0.75], values: { systolic: null, diastolic: null, pulse: null }, rows: 0, confidence: 0 });
+  return null;
 }
 
 /** Obrezivanje okvira na granice slike (udjeli 0–1). */
@@ -111,7 +120,8 @@ function clip(r: AutoDetectResult): AutoDetectResult {
   return { ...r, rect: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, dividers: d };
 }
 
-function detectAt(g: Uint8ClampedArray, sw: number, sh: number, winFrac: number, debug?: (info: unknown) => void, frames?: Box[], relative = false): AutoDetectResult | null {
+/** Redovi znamenki (s dekodiranom vrijednošću) na jednoj binarizaciji slike. */
+function readsAt(g: Uint8ClampedArray, sw: number, sh: number, winFrac: number, debug?: (info: unknown) => void, frames?: Box[], relative = false): RowRead[] {
   const bin = preprocessGray(g, sw, sh, { adaptive: true, closingWindow: Math.max(9, Math.round(sh * winFrac) | 1), relative }).gray;
   const ink = inkFromGray(bin, 128);
   // blaga dilatacija spaja segmente iste znamenke koji se ne dodiruju u kutovima
@@ -126,12 +136,22 @@ function detectAt(g: Uint8ClampedArray, sw: number, sh: number, winFrac: number,
   // znamenke mogu biti i vrlo velike (tijesan izrez ili blizu snimljeno): do 45 % visine
   const parts = comps.filter((b) => { const bw = b.x1 - b.x0 + 1, bh = b.y1 - b.y0 + 1; return bh >= sh * 0.012 && bh <= sh * 0.45 && bw <= sw * 0.5; });
   // sjeme redova: visoke uspravne komponente (cijele znamenke ili njihovi okomiti segmenti)
-  const seeds = parts.filter((b) => { const bw = b.x1 - b.x0 + 1, bh = b.y1 - b.y0 + 1; return bh >= sh * 0.03 && bh / bw >= 1.1; }).sort((a, b) => (b.y1 - b.y0) - (a.y1 - a.y0));
+  // (vrlo tanke visoke šipke – traka u boji uz zaslon, rub kućišta – nisu znamenke ni njihovi segmenti,
+  // a spojile bi susjedne redove u jedan)
+  const seeds = parts.filter((b) => { const bw = b.x1 - b.x0 + 1, bh = b.y1 - b.y0 + 1; return bh >= sh * 0.03 && bh / bw >= 1.1 && bh / bw <= 7; }).sort((a, b) => (b.y1 - b.y0) - (a.y1 - a.y0));
   const rows: { y0: number; y1: number; members: Box[] }[] = [];
+  // red s najvećim okomitim preklapanjem (a ne prvi koji sadrži središte: gornja polovica odlomljene „1”
+  // inače završi u redu ruba zaslona iznad)
+  const overlapOf = (r: { y0: number; y1: number }, b: Box) => Math.min(r.y1, b.y1) - Math.max(r.y0, b.y0) + 1;
+  const bestRow = (b: Box, ok: (r: { y0: number; y1: number; members: Box[] }) => boolean) => {
+    let best: (typeof rows)[number] | null = null, bestO = 0;
+    for (const r of rows) { if (!ok(r)) continue; const o = overlapOf(r, b); if (o > bestO) { bestO = o; best = r; } }
+    return best;
+  };
   for (const sd of seeds) {
     const cy = (sd.y0 + sd.y1) / 2, hh = sd.y1 - sd.y0 + 1;
     // okomiti segment odlomljene znamenke visok je oko pola znamenke, pa i on pripada redu
-    const row = rows.find((r) => cy >= r.y0 && cy <= r.y1 && hh >= (r.y1 - r.y0 + 1) * 0.35);
+    const row = bestRow(sd, (r) => cy >= r.y0 && cy <= r.y1 && hh >= (r.y1 - r.y0 + 1) * 0.35);
     if (row) { row.members.push(sd); row.y0 = Math.min(row.y0, sd.y0); row.y1 = Math.max(row.y1, sd.y1); }
     else rows.push({ y0: sd.y0, y1: sd.y1, members: [sd] });
   }
@@ -139,11 +159,11 @@ function detectAt(g: Uint8ClampedArray, sw: number, sh: number, winFrac: number,
   for (const b of parts) {
     if (seeds.includes(b)) continue;
     const cy = (b.y0 + b.y1) / 2;
-    const row = rows.find((r) => cy >= r.y0 - (r.y1 - r.y0) * 0.1 && cy <= r.y1 + (r.y1 - r.y0) * 0.1);
+    const row = bestRow(b, (r) => cy >= r.y0 - (r.y1 - r.y0) * 0.1 && cy <= r.y1 + (r.y1 - r.y0) * 0.1);
     if (row) row.members.push(b);
   }
   const cands: number[][] = [];
-  interface RowRead { boxes: Box[]; value: number; y0: number; y1: number; height: number }
+  const allCells: number[][] = [];
   const reads: RowRead[] = [];
   for (const row of rows) {
     const H = row.y1 - row.y0 + 1;
@@ -156,13 +176,16 @@ function detectAt(g: Uint8ClampedArray, sw: number, sh: number, winFrac: number,
       const last = cells[cells.length - 1];
       const overlap = last ? Math.min(last.x1, m.x1) - m.x0 + 1 : 0;
       const minW = last ? Math.min(last.x1 - last.x0 + 1, m.x1 - m.x0 + 1) : 1;
-      if (last && overlap >= minW * 0.3) { last.x1 = Math.max(last.x1, m.x1); last.y0 = Math.min(last.y0, m.y0); last.y1 = Math.max(last.y1, m.y1); last.area += m.area; }
+      // dijelovi iste znamenke i okomito se dodiruju ili gotovo dodiruju; ikona ispod znamenke (srce ispod „9”) ne
+      const vgap = last ? Math.max(m.y0 - last.y1, last.y0 - m.y1) : 0;
+      if (last && overlap >= minW * 0.3 && vgap <= H * 0.12) { last.x1 = Math.max(last.x1, m.x1); last.y0 = Math.min(last.y0, m.y0); last.y1 = Math.max(last.y1, m.y1); last.area += m.area; }
       else cells.push({ ...m });
     }
     // ćelija je znamenka ako je uspravna i nije puna mrlja (7-seg dekoder bi punu mrlju pročitao kao 8)
     const glyphs: Glyph[] = [];
     for (const c of cells) {
       const cw = c.x1 - c.x0 + 1, ch = c.y1 - c.y0 + 1;
+      allCells.push([row.y0, c.x0, c.y0, c.x1, c.y1]);
       if (ch < H * 0.55) continue;
       const aspect = ch / cw, fill = c.area / (cw * ch);
       cands.push([c.x0, c.y0, c.x1, c.y1, +fill.toFixed(2)]);
@@ -180,11 +203,40 @@ function detectAt(g: Uint8ClampedArray, sw: number, sh: number, winFrac: number,
     if (value === null) continue;
     const used = kept.length === 3 && tryLen(3) === null ? kept.slice(-2) : kept;
     const y0 = Math.min(...used.map((k) => k.y0)), y1 = Math.max(...used.map((k) => k.y1));
-    reads.push({ boxes: used.map((k) => ({ x0: k.x0, y0: k.y0, x1: k.x1, y1: k.y1, area: 0 })), value, y0, y1, height: y1 - y0 + 1 });
+    reads.push({ boxes: used.map((k) => ({ x0: k.x0, y0: k.y0, x1: k.x1, y1: k.y1, area: 0, digit: PATTERNS[k.segs] })), value, y0, y1, height: y1 - y0 + 1 });
   }
-  debug?.({ win: winFrac, size: [sw, sh], comps: comps.map((b) => [b.x0, b.y0, b.x1, b.y1, b.area]), parts: parts.map((b) => [b.x0, b.y0, b.x1, b.y1]), rowsY: rows.map((r) => [r.y0, r.y1]), cands, rows: rows.map((r) => r.members.length), reads: reads.map((r) => [r.value, r.y0, r.y1, r.boxes.length]) });
+  debug?.({ win: winFrac, size: [sw, sh], cells: allCells, comps: comps.map((b) => [b.x0, b.y0, b.x1, b.y1, b.area]), parts: parts.map((b) => [b.x0, b.y0, b.x1, b.y1]), rowsY: rows.map((r) => [r.y0, r.y1]), cands, rows: rows.map((r) => r.members.length), reads: reads.map((r) => [r.value, r.y0, r.y1, r.boxes.length]) });
+  return reads;
+}
+
+/**
+ * Spajanje redova s više binarizacija iste slike: isti red (preklapanje po visini) zadržava se jednom,
+ * s više znamenki ako ih koja binarizacija nađe (npr. „111” umjesto „11”).
+ */
+function mergeReads(all: RowRead[]): RowRead[] {
+  const out: RowRead[] = [];
+  for (const r of all) {
+    const same = out.findIndex((o) => Math.min(o.y1, r.y1) - Math.max(o.y0, r.y0) > Math.min(o.height, r.height) * 0.6);
+    if (same < 0) { out.push(r); continue; }
+    // unija znamenki obiju binarizacija (jedna nađe lijevu „1”, druga srednju): ista znamenka = preklapanje po x
+    const o = out[same];
+    const boxes = o.boxes.slice();
+    for (const b of r.boxes) {
+      const dup = boxes.some((x) => Math.min(x.x1, b.x1) - Math.max(x.x0, b.x0) + 1 >= Math.min(x.x1 - x.x0, b.x1 - b.x0) * 0.5);
+      if (!dup) boxes.push(b);
+    }
+    boxes.sort((a, b) => a.x0 - b.x0);
+    const used = boxes.slice(-3);
+    const y0 = Math.min(...used.map((k) => k.y0)), y1 = Math.max(...used.map((k) => k.y1));
+    out[same] = { boxes: used, value: Number(used.map((k) => k.digit).join('')), y0, y1, height: y1 - y0 + 1 };
+  }
+  return out;
+}
+
+/** Izbor tri reda (SYS, DIA, puls) i okvira iz nađenih redova. */
+function choose(reads: RowRead[], sw: number, sh: number): AutoDetectResult | null {
   if (reads.length < 2) return null;
-  reads.sort((a, b) => a.y0 - b.y0);
+  reads = reads.slice().sort((a, b) => a.y0 - b.y0);
   // biramo tri uzastopna reda: SYS > DIA, puls manji od DIA po visini znamenki, vrijednosti u rasponu
   const inR = (v: number, [lo, hi]: readonly [number, number]) => v >= lo && v <= hi;
   let best: { s: RowRead; d: RowRead; p: RowRead | null; score: number } | null = null;

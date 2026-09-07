@@ -147,6 +147,12 @@ createdAt, updatedAt) i ostaje mapljiv na HealthKit/Health Connect.
   (`preprocessGray({ relative: true })`), jer na cijeloj fotografiji prag određuju najtamniji dijelovi (crijevo, sjene),
   a sivi LCD sa znamenkama u sjeni ispadne razlomljen. Okvir s rubom smije prijeći granice unutrašnjosti; obrezuje se
   na kraju, s preračunom horizontala.
+- Auto-detekcija, drugi krug ispravaka (dijagnostika 111/90/63): tanke visoke šipke (traka u boji uz zaslon) nisu
+  sjeme reda, jer bi spojile redove DIA i puls; dio znamenke ide u red s najvećim okomitim preklapanjem, a ne u prvi
+  koji sadrži njegovo središte; ćelija znamenke spaja dijelove samo ako se okomito (gotovo) dodiruju (srce ispod „9”
+  ostaje ikona); redovi pročitani na različitim binarizacijama spajaju se po znamenkama (jedna nađe lijevu „1”, druga
+  srednju). Kad ništa nije pročitano, a okvir zaslona postoji, on je početni okvir za ručni izrez umjesto zadanog
+  okvira na sredini fotografije.
 - Inverzija polariteta samo kad je uz nisku srednju svjetlinu i svijetli rep histograma jači od tamnog: tamni LCD u
   sjeni (BM38, zona pulsa) s još tamnijim znamenkama više se ne invertira (prije je to zonu pulsa pretvaralo u mrlje).
 - Nakon rezanja svijetlog ruba (`trimDisplay`) horizontale se preračunaju na novu visinu.
