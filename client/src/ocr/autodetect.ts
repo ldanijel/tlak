@@ -87,7 +87,8 @@ function detectAt(g: Uint8ClampedArray, sw: number, sh: number, winFrac: number,
   const joined = dilateInk(ink, sw, sh, Math.max(1, Math.round(sh * 0.005)));
   const comps = connectedComponents(joined, sw, sh, Math.round(sh * sh * 0.0002));
   // komponente koje mogu biti (dio) znamenke: ne prevelike i ne sitne
-  const parts = comps.filter((b) => { const bw = b.x1 - b.x0 + 1, bh = b.y1 - b.y0 + 1; return bh >= sh * 0.012 && bh <= sh * 0.3 && bw <= sw * 0.35; });
+  // znamenke mogu biti i vrlo velike (tijesan izrez ili blizu snimljeno): do 45 % visine
+  const parts = comps.filter((b) => { const bw = b.x1 - b.x0 + 1, bh = b.y1 - b.y0 + 1; return bh >= sh * 0.012 && bh <= sh * 0.45 && bw <= sw * 0.5; });
   // sjeme redova: visoke uspravne komponente (cijele znamenke ili njihovi okomiti segmenti)
   const seeds = parts.filter((b) => { const bw = b.x1 - b.x0 + 1, bh = b.y1 - b.y0 + 1; return bh >= sh * 0.03 && bh / bw >= 1.1; }).sort((a, b) => (b.y1 - b.y0) - (a.y1 - a.y0));
   const rows: { y0: number; y1: number; members: Box[] }[] = [];
@@ -145,7 +146,7 @@ function detectAt(g: Uint8ClampedArray, sw: number, sh: number, winFrac: number,
     const y0 = Math.min(...used.map((k) => k.y0)), y1 = Math.max(...used.map((k) => k.y1));
     reads.push({ boxes: used.map((k) => ({ x0: k.x0, y0: k.y0, x1: k.x1, y1: k.y1, area: 0 })), value, y0, y1, height: y1 - y0 + 1 });
   }
-  debug?.({ win: winFrac, size: [sw, sh], comps: comps.length, parts: parts.map((b) => [b.x0, b.y0, b.x1, b.y1]), rowsY: rows.map((r) => [r.y0, r.y1]), cands, rows: rows.map((r) => r.members.length), reads: reads.map((r) => [r.value, r.y0, r.y1, r.boxes.length]) });
+  debug?.({ win: winFrac, size: [sw, sh], comps: comps.map((b) => [b.x0, b.y0, b.x1, b.y1, b.area]), parts: parts.map((b) => [b.x0, b.y0, b.x1, b.y1]), rowsY: rows.map((r) => [r.y0, r.y1]), cands, rows: rows.map((r) => r.members.length), reads: reads.map((r) => [r.value, r.y0, r.y1, r.boxes.length]) });
   if (reads.length < 2) return null;
   reads.sort((a, b) => a.y0 - b.y0);
   // biramo tri uzastopna reda: SYS > DIA, puls manji od DIA po visini znamenki, vrijednosti u rasponu
@@ -174,7 +175,8 @@ function detectAt(g: Uint8ClampedArray, sw: number, sh: number, winFrac: number,
   rect.w -= rect.x; rect.h -= rect.y;
   const mid = (a: RowRead, b: RowRead) => ((a.y1 + b.y0) / 2 / sh - rect.y) / rect.h;
   const d1 = mid(best.s, best.d);
-  const d2 = best.p ? mid(best.d, best.p) : ((best.d.y1 + best.d.height * 0.35) / sh - rect.y) / rect.h;
+  // bez reda pulsa: horizontala odmah ispod DIA-e (puls je tik ispod), glavni cjevovod je poslije privuče na prazan redak
+  const d2 = best.p ? mid(best.d, best.p) : ((best.d.y1 + best.d.height * 0.08) / sh - rect.y) / rect.h;
   return {
     rect, dividers: [d1, d2],
     values: { systolic: best.s.value, diastolic: best.d.value, pulse: best.p?.value ?? null },

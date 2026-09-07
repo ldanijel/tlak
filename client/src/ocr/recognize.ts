@@ -268,7 +268,12 @@ export async function recognizeBands(displayIn: HTMLCanvasElement, dividersIn: [
     // dekoder segmenata (bez učenja): siguran je kad su segmenti jasno uključeni/isključeni
     if (seg.value !== null) {
       if (best.value === seg.value) best = { value: seg.value, confidence: Math.max(best.confidence, seg.confidence, 85) };
-      else if (best.value === null || seg.confidence >= 75) best = { value: seg.value, confidence: Math.min(seg.confidence, best.value === null ? seg.confidence : 65), reason: best.value === null ? undefined : `segmenti ${seg.value}, OCR ${best.value}` };
+      else if (best.value === null || seg.confidence >= 75) {
+        // dekoder segmenata je na LCD fontu pouzdaniji od Tesseracta: neslaganje spušta pouzdanost
+        // na 72 % (Tesseract nesiguran) ili 65 % (Tesseract siguran), vrijednost ostaje iz segmenata
+        const tessSure = best.value !== null && best.confidence >= 60;
+        best = { value: seg.value, confidence: best.value === null ? seg.confidence : tessSure ? 65 : 72, reason: best.value === null ? undefined : `segmenti ${seg.value}, OCR ${best.value}` };
+      }
       if (!bestVariant) bestVariant = 'sevenseg';
     }
     // spajanje s naučenim modelom: slaganje diže pouzdanost, neslaganje traži ručnu provjeru

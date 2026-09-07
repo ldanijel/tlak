@@ -17,7 +17,7 @@ import { findSession } from './NewMeasurement.tsx';
 type Stage = 'pick' | 'crop' | 'ocr' | 'confirm';
 
 export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
-  const { data, save, remove } = useStore();
+  const { data, save, remove, auth } = useStore();
   const nav = useNavigate();
   const toast = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -157,6 +157,7 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
     });
     // Učenje: potvrđene znamenke i raspored zaslona pamte se za ovaj tlakomjer.
     if (deviceId && result && source) {
+      try {
       let md = { ...modelData, samples: { ...modelData.samples }, variantWins: { ...modelData.variantWins } };
       const confirmedValues = [String(sys), String(dia), String(pulse)];
       const ocrValues = [result.systolic.value, result.diastolic.value, result.pulse.value];
@@ -168,6 +169,11 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
       md.photos += 1;
       md.layout = { rect: { x: rect.x / source.width, y: rect.y / source.height, w: rect.w / source.width, h: rect.h / source.height }, dividers };
       await save('ocrModels', { id: model?.id || deviceId, deviceId, ...md });
+      try { localStorage.setItem('tlak.lastLearn', `${new Date().toISOString()} ok photos=${md.photos}`); } catch { /* ignore */ }
+      } catch (e) {
+        try { localStorage.setItem('tlak.lastLearn', `${new Date().toISOString()} ERR ${(e as Error).message}`); } catch { /* ignore */ }
+        toast.show(`Učenje OCR-a nije uspjelo: ${(e as Error).message}`);
+      }
     }
     // Fotografija se ne čuva: izvor je uklonjen iz radne memorije.
     setSource(null); setResult(null);
@@ -242,6 +248,7 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
       glyphs: result.glyphs.map((g) => g.map((x) => ({ x0: x.x0, x1: x.x1, y0: x.y0, y1: x.y1, bits: bitsToBase64(x.bits) }))),
       bandDims: result.bandDims,
       model: { samples: Object.fromEntries(Object.entries(modelData.samples).map(([k, v]) => [k, v.length])), photos: modelData.photos, positions: modelData.positions || {} },
+      learning: { deviceId, modelRecords: data.ocrModels.map((m) => ({ id: m.id, deviceId: m.deviceId, photos: m.photos })), lastLearn: (() => { try { return localStorage.getItem('tlak.lastLearn'); } catch { return null; } })(), auth: !!auth },
       images: result.diagnostics,
     };
     const r = await shareOrDownload(`tlak-ocr-dijagnostika-${stamp()}.json`, JSON.stringify(pkg), 'application/json');
