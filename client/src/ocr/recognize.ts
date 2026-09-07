@@ -256,7 +256,9 @@ export async function recognizeBands(displayIn: HTMLCanvasElement, dividersIn: [
     const seg = decodeBandSevenSegment(glyphs, ranges[i]);
     // znamenke koje dodiruju gornji ili donji rub zone vjerojatno su odrezane horizontalom: očitanje nije pouzdano
     const keptForCut = rightmostDigits(glyphs, 3);
-    const cut = keptForCut.length >= 2 && keptForCut.filter((g) => g.y0 <= 1 || g.y1 >= bin.height - 2).length * 2 >= keptForCut.length;
+    // (odrezano i kad zadnja znamenka dodiruje desni rub zone: zapamćeni raspored preuzak za ovaj kadar)
+    const lastG = keptForCut[keptForCut.length - 1];
+    const cut = keptForCut.length >= 2 && (keptForCut.filter((g) => g.y0 <= 1 || g.y1 >= bin.height - 2).length * 2 >= keptForCut.length || (lastG !== undefined && lastG.x1 >= bin.width - 2));
     bandDims.push({ w: bin.width, h: bin.height });
     const align = checkAlignment(model, i, glyphs, { w: bin.width, h: bin.height });
     if (align) alignmentWarnings.push(align);

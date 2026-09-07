@@ -166,6 +166,10 @@ createdAt, updatedAt) i ostaje mapljiv na HealthKit/Health Connect.
   `client/test/autodetect.test.ts`, koji za svaku traži tri reda i točne vrijednosti bez ručnog izreza.
 - Ekran potvrde: polje se samo popunjava samo pri pouzdanosti ≥ 70 %; slabije očitanje nudi se kao gumb
   „OCR predlaže N (x %) – prihvati”, pa se kriva vrijednost ne može potvrditi nehotice.
+- Dijagnostika: umanjena fotografija 1200 px (bilo 800) i `layout.trace` – što je auto-detekcija našla (redovi, okvir)
+  i za svaki OCR pokušaj (auto / zapamćeni raspored / ručno) očitanja i je li prošao provjeru pouzdanosti.
+- Odrezanost i vodoravno: zadnja znamenka koja dodiruje desni rub zone (zapamćeni raspored preuzak za novi kadar)
+  označava očitanje nepouzdanim. Prag samostalnog popunjavanja polja: 70 %, a 60 % kad je naučeni model aktivan.
 - Inverzija polariteta samo kad je uz nisku srednju svjetlinu i svijetli rep histograma jači od tamnog: tamni LCD u
   sjeni (BM38, zona pulsa) s još tamnijim znamenkama više se ne invertira (prije je to zonu pulsa pretvaralo u mrlje).
 - Nakon rezanja svijetlog ruba (`trimDisplay`) horizontale se preračunaju na novu visinu.

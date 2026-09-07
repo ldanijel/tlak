@@ -16,18 +16,18 @@ import { findSession } from './NewMeasurement.tsx';
 
 type Stage = 'pick' | 'crop' | 'ocr' | 'confirm';
 
-/** Umanjena kopija cijele fotografije (dulja stranica 800 px) za dijagnostiku. */
+/** Umanjena kopija cijele fotografije (dulja stranica 1200 px) za dijagnostiku. */
 function thumbnail(c: HTMLCanvasElement): string {
   try {
-    const k = Math.min(1, 800 / Math.max(c.width, c.height));
+    const k = Math.min(1, 1200 / Math.max(c.width, c.height));
     const t = document.createElement('canvas'); t.width = Math.round(c.width * k); t.height = Math.round(c.height * k);
     t.getContext('2d')!.drawImage(c, 0, 0, t.width, t.height);
-    return t.toDataURL('image/jpeg', 0.6);
+    return t.toDataURL('image/jpeg', 0.7);
   } catch { return ''; }
 }
 
-/** Prag pouzdanosti iznad kojeg se očitanje samo popunjava u polje. */
-const SURE = 70;
+/** Prag pouzdanosti iznad kojeg se očitanje samo popunjava u polje (niži kad je naučeni model aktivan). */
+const SURE_BASE = 70, SURE_LEARNED = 60;
 
 export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
   const { data, save, remove, auth } = useStore();
@@ -44,12 +44,15 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
   const [newDevice, setNewDevice] = useState('');
   const model: OcrModel | undefined = data.ocrModels.find((x) => x.deviceId === deviceId);
   const modelData: OcrModelData = model ? { samples: model.samples, variantWins: model.variantWins, photos: model.photos, layout: model.layout, positions: model.positions || {} } : emptyModel();
+  const SURE = modelReady(modelData) ? SURE_LEARNED : SURE_BASE;
   const [layoutApplied, setLayoutApplied] = useState(false);
   const [autoFound, setAutoFound] = useState<'auto' | 'memory' | null>(null);
   /** Podrijetlo trenutačnog izreza: automatski, zapamćeni raspored ili ručno postavljen. */
   const [origin, setOrigin] = useState<'auto' | 'memory' | 'manual'>('manual');
   const [autoNotice, setAutoNotice] = useState<string | null>(null);
   const autoInfo = useRef<unknown>(null);
+  /** Trag automatskih pokušaja (za dijagnostiku): što je auto-detekcija našla i zašto je koji pokušaj odbačen. */
+  const autoTrace = useRef<unknown[]>([]);
   const [thumb, setThumb] = useState<string>('');
   // Opcija: nakon spremanja odmah nova fotografija (serija mjerenja). Pamti se na ovom uređaju.
   const [series, setSeries] = useState<boolean>(() => { try { return localStorage.getItem('tlak.photoSeries') === '1'; } catch { return false; } });
@@ -110,7 +113,9 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
       // 1) automatsko pronalaženje redova znamenki; 2) zapamćeni raspored; 3) ručni izrez.
       // Svaki automatski pokušaj prolazi samo ako su SYS i DIA pouzdano pročitani; inače slijedi idući korak.
       const attempts: { origin: 'auto' | 'memory'; rect: Rect; dividers: [number, number] }[] = [];
+      autoTrace.current = [];
       const found = detectDisplay(c);
+      autoTrace.current.push({ step: 'autoDetect', found: found ? { rows: found.rows, rect: { x: found.rect.x / c.width, y: found.rect.y / c.height, w: found.rect.w / c.width, h: found.rect.h / c.height }, dividers: found.dividers } : null });
       if (found && found.rows >= 2) attempts.push({ origin: 'auto', rect: found.rect, dividers: found.dividers });
       if (model?.layout) {
         const l = model.layout;
@@ -163,6 +168,7 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
     try {
       const display = cropRotate(src, r0, 0);
       const r = await recognizeBands(display, div, (s, p) => setProgress({ stage: s, p }), modelData);
+      autoTrace.current.push({ step: 'ocr', from, reliable: reliable(r), systolic: r.systolic, diastolic: r.diastolic, pulse: r.pulse, alignmentWarnings: r.alignmentWarnings, warnings: r.warnings });
       if (from !== 'manual' && !reliable(r)) return false;
       if (r.dividers) setDividers(r.dividers); // horizontale privučene na prazne retke ostaju zapamćene
       setResult(r);
@@ -292,7 +298,7 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
       device: data.devices.find((d) => d.id === deviceId)?.name || null,
       confirmed: { systolic: sys, diastolic: dia, pulse },
       ocr: { systolic: result.systolic, diastolic: result.diastolic, pulse: result.pulse, engine: result.engine, warnings: result.warnings, variantWinner: result.variantWinner },
-      layout: { rect: source ? { x: rect.x / source.width, y: rect.y / source.height, w: rect.w / source.width, h: rect.h / source.height } : null, dividers, origin, autoDetect: autoInfo.current },
+      layout: { rect: source ? { x: rect.x / source.width, y: rect.y / source.height, w: rect.w / source.width, h: rect.h / source.height } : null, dividers, origin, autoDetect: autoInfo.current, trace: autoTrace.current },
       photo: thumb,
       tokens: result.debug.digits,
       glyphs: result.glyphs.map((g) => g.map((x) => ({ x0: x.x0, x1: x.x1, y0: x.y0, y1: x.y1, bits: bitsToBase64(x.bits) }))),
