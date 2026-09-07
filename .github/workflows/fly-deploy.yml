@@ -48,7 +48,16 @@ jobs:
           if flyctl apps list --json | grep -qi "\"name\": *\"$APP\""; then echo "Aplikacija postoji."; else flyctl apps create "$APP" --org personal; fi
       - name: Stvori disk za bazu ako ne postoji
         run: |
-          if flyctl volumes list -a "$APP" --json | grep -qi '"name": *"tlak_data"'; then echo "Disk postoji."; else flyctl volumes create tlak_data -a "$APP" --region "$REGION" --size 1 --yes; fi
+          # Ako popis diskova ne uspije (istekao probni period, nevažeći token…), NE stvaramo novi disk, nego jasno javljamo razlog.
+          if ! out=$(flyctl volumes list -a "$APP" --json 2>&1); then
+            echo "$out"
+            case "$out" in
+              *"trial has ended"*|*"credit card"*) echo "::error::Fly.io: probno razdoblje je isteklo. Dodajte karticu na https://fly.io/dashboard/personal/billing pa ponovno pokrenite objavu (Actions → Objavi na Fly.io → Run workflow)." ;;
+              *) echo "::error::Fly.io ne može prikazati diskove aplikacije $APP. Provjerite FLY_API_TOKEN i stanje računa na https://fly.io/dashboard." ;;
+            esac
+            exit 1
+          fi
+          if echo "$out" | grep -qi '"name": *"tlak_data"'; then echo "Disk postoji."; else flyctl volumes create tlak_data -a "$APP" --region "$REGION" --size 1 --yes; fi
       - name: Postavi pozivni kod
         run: |
           if [ -n "$INVITE_CODE" ]; then flyctl secrets set INVITE_CODE="$INVITE_CODE" -a "$APP" --stage; else echo "INVITE_CODE nije postavljen – registracija je otvorena svima koji znaju adresu."; fi
