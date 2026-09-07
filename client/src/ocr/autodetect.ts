@@ -90,27 +90,36 @@ export function autoDetect(gray: Uint8ClampedArray, w: number, h: number, debug?
   const uniq = frames.filter((f) => { const dup = seen.some((s) => Math.abs(s.x0 - f.x0) < sw * 0.03 && Math.abs(s.y0 - f.y0) < sh * 0.03 && Math.abs(s.x1 - f.x1) < sw * 0.03 && Math.abs(s.y1 - f.y1) < sh * 0.03); if (!dup) seen.push(f); return !dup; })
     .sort((a, b) => (b.x1 - b.x0) * (b.y1 - b.y0) - (a.x1 - a.x0) * (a.y1 - a.y0)).slice(0, 3);
   for (const f of uniq) {
-    // Okvir komponente ne mora obuhvatiti cijeli zaslon (donji rub LCD-a često je zasebna komponenta,
-    // a red pulsa je ispod DIA-e), pa se unutrašnjost proširuje prema dolje za 30 % visine okvira.
-    const inset = Math.round(Math.min(f.x1 - f.x0, f.y1 - f.y0) * 0.03) + 2;
-    const cx0 = f.x0 + inset, cy0 = f.y0 + inset, cx1 = f.x1 - inset;
-    const cw = cx1 - cx0 + 1;
-    if (cw < sw * 0.1) continue;
-    // Prvo unutrašnjost okvira; ako nema tri reda, još i produženo prema dolje za 30 % visine okvira
-    // (donji rub LCD-a često je zasebna komponenta, pa okvir ne obuhvaća red pulsa). Isto ishodište,
-    // pa se redovi iz oba izreza spajaju.
+    const fw = f.x1 - f.x0 + 1, fh = f.y1 - f.y0 + 1;
+    // Zajedničko ishodište za sve varijante: okvir proširen za 5 % (i za 30 % visine prema dolje, jer je
+    // donji rub LCD-a često zasebna komponenta pa okvir ne obuhvaća red pulsa). Redovi iz svih varijanti
+    // spajaju se u tom koordinatnom sustavu.
+    const pad = Math.round(Math.min(fw, fh) * 0.05) + 2;
+    const ex0 = Math.max(0, f.x0 - pad), ey0 = Math.max(0, f.y0 - pad);
+    const ex1 = Math.min(sw - 1, f.x1 + pad), ey1 = Math.min(sh - 1, f.y1 + Math.round(fh * 0.3));
+    const ew = ex1 - ex0 + 1, eh = ey1 - ey0 + 1;
+    if (ew < sw * 0.1 || eh < sh * 0.1) continue;
+    const inset = Math.round(Math.min(fw, fh) * 0.03) + 2;
+    // Varijante (u koordinatama proširenog izreza): 1) unutrašnjost bez ruba – rub LCD-a spojen sa znamenkama
+    // se odreže; 2) unutrašnjost produžena dolje – red pulsa ispod okvira; 3) cijeli prošireni izrez – kad
+    // „okvir” nije rub zaslona nego sam blok znamenki, pa bi rezanje ruba odrezalo znamenke.
+    const ix0 = f.x0 + inset - ex0, iy0 = f.y0 + inset - ey0, ix1 = f.x1 - inset - ex0, iy1 = f.y1 - inset - ey0;
+    const variants: [number, number, number, number][] = [[ix0, iy0, ix1, iy1], [ix0, iy0, ix1, eh - 1], [0, 0, ew - 1, eh - 1]];
     let facc: RowRead[] = [];
-    for (const ext of [0, 0.3]) {
-      const cy1 = Math.min(sh - 1, f.y1 - (ext ? 0 : inset) + Math.round((f.y1 - f.y0) * ext));
-      const ch = cy1 - cy0 + 1;
-      if (ch < sh * 0.1) continue;
+    for (let vi = 0; vi < variants.length; vi++) {
+      const [vx0, vy0, vx1, vy1] = variants[vi];
+      const cw = vx1 - vx0 + 1, ch = vy1 - vy0 + 1;
+      if (cw < 8 || ch < 8) continue;
       const crop = new Uint8ClampedArray(cw * ch);
-      for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) crop[y * cw + x] = g[(cy0 + y) * sw + cx0 + x];
-      for (const frac of [0.08, 0.12, 0.05]) {
-        facc = mergeReads([...facc, ...readsAt(crop, cw, ch, frac, debug ? (info) => debug({ frame: [f.x0, f.y0, f.x1, f.y1], ext, ...(info as object) }) : undefined, undefined, true)]);
-        const r = choose(facc, cw, ch);
+      for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) crop[y * cw + x] = g[(ey0 + vy0 + y) * sw + ex0 + vx0 + x];
+      // relativni kontrast pomaže na tamnom LCD-u u sjeni, apsolutni na svijetlom LCD-u pri dnevnom svjetlu
+      // (relativni ondje gubi slabije desne segmente); redovi iz obiju binarizacija se spajaju
+      for (const [frac, relative] of [[0.08, true], [0.08, false], [0.12, true], [0.05, true], [0.05, false], [0.12, false]] as [number, boolean][]) {
+        const reads = readsAt(crop, cw, ch, frac, debug ? (info) => debug({ frame: [f.x0, f.y0, f.x1, f.y1], variant: vi, relative, ...(info as object) }) : undefined, undefined, relative);
+        facc = mergeReads([...facc, ...shiftReads(reads, vx0, vy0)]);
+        const r = choose(facc, ew, eh);
         if (!r) continue;
-        consider({ ...r, rect: { x: (cx0 + r.rect.x * cw) / sw, y: (cy0 + r.rect.y * ch) / sh, w: (r.rect.w * cw) / sw, h: (r.rect.h * ch) / sh } });
+        consider({ ...r, rect: { x: (ex0 + r.rect.x * ew) / sw, y: (ey0 + r.rect.y * eh) / sh, w: (r.rect.w * ew) / sw, h: (r.rect.h * eh) / sh } });
         if (done()) return clip(state.best!);
       }
     }
@@ -192,8 +201,32 @@ function readsAt(g: Uint8ClampedArray, sw: number, sh: number, winFrac: number, 
       else cells.push({ ...m });
     }
     // ćelija je znamenka ako je uspravna i nije puna mrlja (7-seg dekoder bi punu mrlju pročitao kao 8)
-    const glyphs: Glyph[] = [];
+    // preširoka ćelija (kose znamenke „1” i „2” spojene dilatacijom) dijeli se na najpraznijem stupcu
+    // nedilatirane tinte, ako je ondje projekcija gotovo prazna
+    const splitCells: Box[] = [];
     for (const c of cells) {
+      const cw = c.x1 - c.x0 + 1, ch = c.y1 - c.y0 + 1;
+      if (cw / ch > 0.72 && cw > 8) {
+        const prof = new Uint16Array(cw);
+        let maxV = 0, bestX = -1, bestV = Infinity;
+        for (let x = c.x0; x <= c.x1; x++) { let n = 0; for (let y = c.y0; y <= c.y1; y++) n += ink[y * sw + x]; prof[x - c.x0] = n; if (n > maxV) maxV = n; }
+        for (let x = Math.round(cw * 0.15); x <= Math.round(cw * 0.85); x++) if (prof[x] < bestV) { bestV = prof[x]; bestX = x; }
+        if (bestX > 0 && bestV <= maxV * 0.2) {
+          const ext = (x0: number, x1: number): Box | null => {
+            let y0 = c.y1, y1 = c.y0, area = 0;
+            for (let y = c.y0; y <= c.y1; y++) for (let x = x0; x <= x1; x++) if (ink[y * sw + x]) { area++; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+            return area ? { x0, x1, y0, y1, area } : null;
+          };
+          const l = ext(c.x0, c.x0 + bestX - 1), r = ext(c.x0 + bestX + 1, c.x1);
+          if (l) splitCells.push(l);
+          if (r) splitCells.push(r);
+          continue;
+        }
+      }
+      splitCells.push(c);
+    }
+    const glyphs: Glyph[] = [];
+    for (const c of splitCells) {
       const cw = c.x1 - c.x0 + 1, ch = c.y1 - c.y0 + 1;
       allCells.push([row.y0, c.x0, c.y0, c.x1, c.y1]);
       if (ch < H * 0.55) continue;
@@ -241,6 +274,11 @@ function mergeReads(all: RowRead[]): RowRead[] {
     out[same] = { boxes: used, value: Number(used.map((k) => k.digit).join('')), y0, y1, height: y1 - y0 + 1 };
   }
   return out;
+}
+
+/** Pomak redova (iz koordinata pod-izreza u koordinate proširenog izreza). */
+function shiftReads(reads: RowRead[], dx: number, dy: number): RowRead[] {
+  return reads.map((r) => ({ ...r, y0: r.y0 + dy, y1: r.y1 + dy, boxes: r.boxes.map((b) => ({ ...b, x0: b.x0 + dx, x1: b.x1 + dx, y0: b.y0 + dy, y1: b.y1 + dy })) }));
 }
 
 /** Izbor tri reda (SYS, DIA, puls) i okvira iz nađenih redova. */

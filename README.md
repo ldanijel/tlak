@@ -158,6 +158,14 @@ createdAt, updatedAt) i ostaje mapljiv na HealthKit/Health Connect.
   okvir ide 1,5 visine DIA-e ispod DIA-e; debela „8” ima udio tinte do ~0,8, pa se ćelija odbacuje kao puna mrlja tek
   iznad 0,85. Glavni cjevovod: znamenke koje dodiruju gornji ili donji rub zone smatraju se odrezanima i ne popunjavaju
   polje ispod 70 % pouzdanosti (prije je odrezana „87” pročitana kao „97”).
+- Auto-detekcija, četvrti krug (dijagnostika 124/90/65, dnevno svjetlo): okvir se obrađuje u tri varijante s istim
+  ishodištem (unutrašnjost bez ruba, produženo dolje, cijeli prošireni izrez – kad „okvir” nije rub zaslona nego sam
+  blok znamenki), svaka i relativnim i apsolutnim kontrastom (relativni na svijetlom LCD-u gubi slabije desne
+  segmente); preširoka ćelija dijeli se na najpraznijem stupcu nedilatirane tinte („1” i „2” spojene dilatacijom).
+- Trajni testni primjeri: `client/test/fixtures/real/SYS-DIA-PULS.jpg` (fotografije BM38 umanjene na 800 px) i test
+  `client/test/autodetect.test.ts`, koji za svaku traži tri reda i točne vrijednosti bez ručnog izreza.
+- Ekran potvrde: polje se samo popunjava samo pri pouzdanosti ≥ 70 %; slabije očitanje nudi se kao gumb
+  „OCR predlaže N (x %) – prihvati”, pa se kriva vrijednost ne može potvrditi nehotice.
 - Inverzija polariteta samo kad je uz nisku srednju svjetlinu i svijetli rep histograma jači od tamnog: tamni LCD u
   sjeni (BM38, zona pulsa) s još tamnijim znamenkama više se ne invertira (prije je to zonu pulsa pretvaralo u mrlje).
 - Nakon rezanja svijetlog ruba (`trimDisplay`) horizontale se preračunaju na novu visinu.

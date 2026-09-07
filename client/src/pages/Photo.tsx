@@ -26,6 +26,9 @@ function thumbnail(c: HTMLCanvasElement): string {
   } catch { return ''; }
 }
 
+/** Prag pouzdanosti iznad kojeg se očitanje samo popunjava u polje. */
+const SURE = 70;
+
 export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
   const { data, save, remove, auth } = useStore();
   const nav = useNavigate();
@@ -163,7 +166,10 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
       if (from !== 'manual' && !reliable(r)) return false;
       if (r.dividers) setDividers(r.dividers); // horizontale privučene na prazne retke ostaju zapamćene
       setResult(r);
-      setSys(r.systolic.value); setDia(r.diastolic.value); setPulse(r.pulse.value);
+      // polje se popunjava samo pouzdanim očitanjem (≥ 70 %); slabije ostaje kao prijedlog koji korisnik mora dodirnuti,
+      // da se kriva vrijednost ne potvrdi nehotice
+      const sure = (g: { value: number | null; confidence: number }) => (g.value !== null && g.confidence >= SURE ? g.value : null);
+      setSys(sure(r.systolic)); setDia(sure(r.diastolic)); setPulse(sure(r.pulse));
       setMsgs([]); setConfirmed(false);
       setStage('confirm');
       return true;
@@ -381,7 +387,9 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
                 <label>{k === 'systolic' ? 'SYS' : k === 'diastolic' ? 'DIA' : 'Puls'}
                   <NumberInput value={k === 'systolic' ? sys : k === 'diastolic' ? dia : pulse} onChange={(v) => { (k === 'systolic' ? setSys : k === 'diastolic' ? setDia : setPulse)(v); setMsgs([]); setConfirmed(false); }} />
                 </label>
-                <span className="conf">{conf(k)?.value === null ? `nije prepoznato${conf(k)?.reason ? ` (${conf(k)!.reason})` : ''}` : `pouzdanost ${conf(k)?.confidence ?? 0} %${flag(k) ? ' – provjerite' : ''}`}</span>
+                <span className="conf">{conf(k)?.value === null ? `nije prepoznato${conf(k)?.reason ? ` (${conf(k)!.reason})` : ''}` : (conf(k)?.confidence ?? 0) >= SURE ? `pouzdanost ${conf(k)?.confidence ?? 0} %` : (k === 'systolic' ? sys : k === 'diastolic' ? dia : pulse) === null
+                  ? <button type="button" className="btn small" onClick={() => { (k === 'systolic' ? setSys : k === 'diastolic' ? setDia : setPulse)(conf(k)!.value); setMsgs([]); setConfirmed(false); }}>OCR predlaže {conf(k)!.value} ({conf(k)!.confidence} %) – prihvati</button>
+                  : `pouzdanost ${conf(k)?.confidence ?? 0} % – provjerite`}</span>
               </div>
             ))}
           </div>
