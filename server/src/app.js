@@ -1,5 +1,5 @@
 import express from 'express';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { COLLECTIONS } from './db.js';
@@ -10,7 +10,13 @@ const MAX_RECORD_BYTES = 64 * 1024;
 const PULL_LIMIT = 500;
 
 export function createApp(db, options = {}) {
-  const { allowRegistration = true, staticDir = null, trustProxy = false } = options;
+  const { allowRegistration = true, staticDir = null, trustProxy = false, inviteCode = '' } = options;
+  const inviteOk = (given) => {
+    if (!inviteCode) return true;
+    const a = Buffer.from(String(given || '').trim().normalize('NFKC'));
+    const b = Buffer.from(inviteCode.normalize('NFKC'));
+    return a.length === b.length && timingSafeEqual(a, b);
+  };
   const app = express();
   app.disable('x-powered-by');
   if (trustProxy) app.set('trust proxy', trustProxy);
@@ -62,13 +68,14 @@ export function createApp(db, options = {}) {
   const validCredentials = (email, password) =>
     EMAIL_RE.test(email) && typeof password === 'string' && password.length >= 8 && password.length <= 200;
 
-  app.get('/api/health', (req, res) => res.json({ ok: true, registration: allowRegistration }));
+  app.get('/api/health', (req, res) => res.json({ ok: true, registration: allowRegistration, inviteRequired: !!inviteCode }));
 
   app.post('/api/auth/register', async (req, res) => {
     if (!allowRegistration) return res.status(403).json({ error: 'registration_disabled' });
     const email = normEmail(req.body?.email);
-    const { password, deviceName } = req.body || {};
+    const { password, deviceName, inviteCode: given } = req.body || {};
     if (limited(req, res, email)) return;
+    if (!inviteOk(given)) return res.status(403).json({ error: 'bad_invite_code' });
     if (!validCredentials(email, password)) return res.status(400).json({ error: 'invalid_credentials_format' });
     if (q.userByEmail.get(email)) return res.status(409).json({ error: 'email_taken' });
     const id = randomUUID();

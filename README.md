@@ -116,6 +116,12 @@ createdAt, updatedAt) i ostaje mapljiv na HealthKit/Health Connect.
   preglednika) i ispisuje točnost Tesseracta, naučenog modela (leave-one-out) i kombinacije. Mapa `client/test/fixtures/real/` je u
   `.gitignore` jer su fotografije osobni podaci.
 
+## Pozivni kod i preporučeni hosting (Fly.io)
+
+- `INVITE_CODE` (varijabla okoline ili `fly secrets set INVITE_CODE=…`): kad je postavljen, registracija traži pozivni kod, pa račun
+  mogu otvoriti samo osobe kojima ga date (do 10 ukućana, svatko sa svojim podacima). `/api/health` vraća `inviteRequired`.
+- Korak-po-korak upute za netehničara (Mac i Windows, bez Dockera, ispod 5 EUR mjesečno): **`docs/UPUTE-Fly.io.docx`**.
+
 ## Pristup s iPhonea i pokretanje na Windowsu
 
 **Windows (PowerShell):** instalirajte Node.js 22 LTS (installer s nodejs.org, uključite „Add to PATH”), zatim:

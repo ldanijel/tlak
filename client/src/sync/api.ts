@@ -28,6 +28,7 @@ export const ERROR_TEXT: Record<string, string> = {
   email_taken: 'Račun s tom e-poštom već postoji.',
   invalid_credentials_format: 'Unesite ispravnu e-poštu i lozinku od najmanje 8 znakova.',
   registration_disabled: 'Registracija novih računa nije dopuštena na ovom poslužitelju.',
+  bad_invite_code: 'Pozivni kod nije ispravan.',
   too_many_attempts: 'Previše pokušaja. Pokušajte ponovno za 15 minuta.',
   unauthorized: 'Sesija je istekla. Prijavite se ponovno.',
   network: 'Nema veze s poslužiteljem.',

@@ -85,3 +85,19 @@ test('registracija, prijava i sinkronizacija između dva uređaja', async () => 
     close();
   }
 });
+
+test('registracija uz pozivni kod', async () => {
+  const db = openDb(':memory:');
+  const app = createApp(db, { allowRegistration: true, inviteCode: 'obitelj-2026' });
+  const server = await new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const post = async (body) => { const res = await fetch(base + '/api/auth/register', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); return res.status; };
+  try {
+    assert.equal((await (await fetch(base + '/api/health')).json()).inviteRequired, true);
+    assert.equal(await post({ email: 'a@example.com', password: 'lozinka123' }), 403);
+    assert.equal(await post({ email: 'a@example.com', password: 'lozinka123', inviteCode: 'krivi' }), 403);
+    assert.equal(await post({ email: 'a@example.com', password: 'lozinka123', inviteCode: ' obitelj-2026 ' }), 201);
+  } finally {
+    server.close();
+  }
+});

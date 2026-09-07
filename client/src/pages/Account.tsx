@@ -19,9 +19,11 @@ export function AccountPage() {
   const [pwOpen, setPwOpen] = useState(false); const [cur, setCur] = useState(''); const [nw, setNw] = useState('');
   const [delOpen, setDelOpen] = useState(false); const [delPw, setDelPw] = useState('');
   const [regAllowed, setRegAllowed] = useState(true);
+  const [inviteRequired, setInviteRequired] = useState(false);
+  const [invite, setInvite] = useState('');
 
   useEffect(() => {
-    api<{ registration: boolean }>('GET', '/api/health').then((h) => setRegAllowed(h.registration)).catch(() => {});
+    api<{ registration: boolean; inviteRequired?: boolean }>('GET', '/api/health').then((h) => { setRegAllowed(h.registration); setInviteRequired(!!h.inviteRequired); }).catch(() => {});
   }, []);
   useEffect(() => {
     if (!auth) { setMe(null); return; }
@@ -34,7 +36,7 @@ export function AccountPage() {
     if (mode === 'register' && password !== password2) { setErr('Lozinke se ne podudaraju.'); return; }
     setBusy(true);
     try {
-      const r = await api<{ token: string; sessionId: string; user: { email: string } }>('POST', `/api/auth/${mode}`, { email, password, deviceName: deviceName() });
+      const r = await api<{ token: string; sessionId: string; user: { email: string } }>('POST', `/api/auth/${mode}`, { email, password, deviceName: deviceName(), ...(mode === 'register' && invite ? { inviteCode: invite } : {}) });
       await setAuth({ token: r.token, email: r.user.email, sessionId: r.sessionId });
       toast.show(mode === 'register' ? 'Račun je stvoren. Lokalni podaci su poslani na račun.' : 'Prijava uspješna. Podaci su sinkronizirani.');
       setPassword(''); setPassword2('');
@@ -77,6 +79,7 @@ export function AccountPage() {
               <Field label="E-pošta"><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required /></Field>
               <Field label="Lozinka" hint={mode === 'register' ? 'Najmanje 8 znakova.' : undefined}><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === 'register' ? 'new-password' : 'current-password'} minLength={8} required /></Field>
               {mode === 'register' && <Field label="Ponovite lozinku"><input type="password" value={password2} onChange={(e) => setPassword2(e.target.value)} autoComplete="new-password" required /></Field>}
+              {mode === 'register' && inviteRequired && <Field label="Pozivni kod" hint="Kod koji ste dobili od vlasnika aplikacije."><input value={invite} onChange={(e) => setInvite(e.target.value)} autoComplete="off" required /></Field>}
               {err && <Message level="error">{err}</Message>}
               <button type="submit" className="btn primary big" disabled={busy}>{busy ? 'Pričekajte…' : mode === 'register' ? 'Stvori račun i sinkroniziraj' : 'Prijavi se'}</button>
               {data.measurements.length > 0 && <p className="tiny">Nakon prijave {data.measurements.length} lokalnih mjerenja spaja se s podacima na računu (novija izmjena istog zapisa pobjeđuje).</p>}

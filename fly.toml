@@ -1,10 +1,11 @@
-# Fly.io: `fly launch --copy-config --no-deploy`, zatim `fly volumes create tlak_data --size 1` i `fly deploy`.
-app = "tlak"
+# Fly.io – vidi docs/UPUTE-Fly.io.docx i README. Naziv aplikacije mora biti jedinstven na Fly.io; `fly launch` će ga zatražiti.
+app = "tlak-PROMIJENI-ME"
 primary_region = "fra"
 
 [build]
   dockerfile = "Dockerfile"
 
+# Pozivni kod postavlja se tajno: fly secrets set INVITE_CODE=vaš-kod
 [env]
   PORT = "3000"
   DB_PATH = "/data/tlak.db"
@@ -21,3 +22,8 @@ primary_region = "fra"
 [[mounts]]
   source = "tlak_data"
   destination = "/data"
+  initial_size = "1gb"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
