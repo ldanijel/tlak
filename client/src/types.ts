@@ -112,6 +112,7 @@ export interface OcrModel extends SyncBase {
   variantWins: Record<string, number>;
   photos: number;
   layout: { rect: { x: number; y: number; w: number; h: number }; dividers: [number, number] } | null;
+  positions?: Record<string, { n: number; xStart: number; xEnd: number; yCenter: number; height: number; digits: number }>;
 }
 
 export type Collection = 'measurements' | 'targets' | 'devices' | 'medications' | 'events' | 'settings' | 'ocrModels';

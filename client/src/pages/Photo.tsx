@@ -27,7 +27,7 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
   const [deviceId, setDeviceId] = useState<string>(() => { try { return localStorage.getItem('tlak.lastDevice') || data.devices[0]?.id || ''; } catch { return data.devices[0]?.id || ''; } });
   const [newDevice, setNewDevice] = useState('');
   const model: OcrModel | undefined = data.ocrModels.find((x) => x.deviceId === deviceId);
-  const modelData: OcrModelData = model ? { samples: model.samples, variantWins: model.variantWins, photos: model.photos, layout: model.layout } : emptyModel();
+  const modelData: OcrModelData = model ? { samples: model.samples, variantWins: model.variantWins, photos: model.photos, layout: model.layout, positions: model.positions || {} } : emptyModel();
   const [layoutApplied, setLayoutApplied] = useState(false);
 
   const applyLayout = (c: HTMLCanvasElement, m: OcrModel | undefined) => {
@@ -123,7 +123,7 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
       const confirmedValues = [String(sys), String(dia), String(pulse)];
       const ocrValues = [result.systolic.value, result.diastolic.value, result.pulse.value];
       confirmedValues.forEach((v, i) => {
-        md = learn(md, result.glyphs[i] || [], v);
+        md = learn(md, result.glyphs[i] || [], v, result.bandDims[i], i);
         const win = result.variantWinner[i];
         if (win && ocrValues[i] === Number(v)) md.variantWins[win] = (md.variantWins[win] || 0) + 1;
       });

@@ -1,0 +1,23 @@
+# Fly.io: `fly launch --copy-config --no-deploy`, zatim `fly volumes create tlak_data --size 1` i `fly deploy`.
+app = "tlak"
+primary_region = "fra"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "3000"
+  DB_PATH = "/data/tlak.db"
+  ALLOW_REGISTRATION = "true"
+  TRUST_PROXY = "1"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[mounts]]
+  source = "tlak_data"
+  destination = "/data"

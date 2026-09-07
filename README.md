@@ -100,6 +100,22 @@ createdAt, updatedAt) i ostaje mapljiv na HealthKit/Health Connect.
   čuvaju, samo male bitmape znamenki.
   U E2E testu na sintetičkoj slici treća potvrđena fotografija daje 100 % pouzdanost na sva tri polja.
 
+## Verzija 1.3
+
+- **Docker slika iz GitHuba:** `.github/workflows/docker.yml` gradi i objavljuje `ghcr.io/ldanijel/tlak` (amd64 + arm64) pri svakom pushu
+  na `main` i za oznake `v*`. Deploy je tada `docker run -p 3000:3000 -v tlak-data:/data ghcr.io/ldanijel/tlak:latest` ili `fly deploy`
+  s priloženim `fly.toml`.
+- **Položaj znamenki po tlakomjeru:** uz predloške, model pamti prosječan položaj i visinu znamenki u svakoj zoni. Pri čitanju se prije
+  spajanja rezultata provjerava odstupanje (visina ± 35 %, pomak po visini > 22 %, vodoravni pomak > 25 %) i korisnik dobiva upozorenje
+  „okvir ili horizontala vjerojatno su pomaknuti” s uputom što pomaknuti.
+- **Otpornost na ikone na zaslonu** (Beurer BM38 ima ikonu ruke uz DIA i srce uz puls): znamenke su na LCD-u poravnate udesno, pa se
+  uzimaju najdesniji glifovi usklađene visine; treći (lijevi) glif prihvaća se kao znamenka samo ako pouzdano sliči naučenoj znamenki ili
+  je uzak (znamenka „1”). Isto pravilo vrijedi i pri učenju.
+- **Ispitni alat za stvarne fotografije:** `node --experimental-strip-types client/scripts/ocr-eval.mjs <mapa>` čita JPEG/PNG datoteke
+  nazvane `SYS-DIA-PULS.jpg` (ime je istina) uz `layout.json` s okvirom i horizontalama, pokreće isti cjevovod kao aplikacija (bez
+  preglednika) i ispisuje točnost Tesseracta, naučenog modela (leave-one-out) i kombinacije. Mapa `client/test/fixtures/real/` je u
+  `.gitignore` jer su fotografije osobni podaci.
+
 ## Pristup s iPhonea i pokretanje na Windowsu
 
 **Windows (PowerShell):** instalirajte Node.js 22 LTS (installer s nodejs.org, uključite „Add to PATH”), zatim:

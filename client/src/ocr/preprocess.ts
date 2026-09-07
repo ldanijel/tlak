@@ -17,7 +17,14 @@ export function preprocess(src: HTMLCanvasElement, opts: { threshold?: boolean; 
   const d = img.data;
   const gray = new Uint8ClampedArray(w * h);
   for (let i = 0, j = 0; i < d.length; i += 4, j++) gray[j] = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000;
+  const r = preprocessGray(gray, w, h, { threshold: opts.threshold });
+  for (let i = 0, j = 0; i < d.length; i += 4, j++) { d[i] = d[i + 1] = d[i + 2] = r.gray[j]; d[i + 3] = 255; }
+  ctx.putImageData(img, 0, 0);
+  return { canvas: c, inverted: r.inverted, contrast: r.contrast };
+}
 
+/** Ista predobrada nad sivom slikom (bez canvasa) – koristi se i u Node ispitnom alatu. */
+export function preprocessGray(gray: Uint8ClampedArray, w: number, h: number, opts: { threshold?: boolean } = {}): { gray: Uint8ClampedArray; inverted: boolean; contrast: number } {
   // median 3×3 protiv šuma
   const med = new Uint8ClampedArray(gray);
   const win = new Array<number>(9);
@@ -27,7 +34,6 @@ export function preprocess(src: HTMLCanvasElement, opts: { threshold?: boolean; 
     win.sort((a, b) => a - b);
     med[y * w + x] = win[4];
   }
-
   // rastezanje kontrasta po percentilima 2–98
   const hist = new Uint32Array(256);
   for (const v of med) hist[v]++;
@@ -38,23 +44,34 @@ export function preprocess(src: HTMLCanvasElement, opts: { threshold?: boolean; 
   for (let i = 255; i >= 0; i--) { acc += hist[i]; if (acc >= total * 0.02) { hi = i; break; } }
   const range = Math.max(1, hi - lo);
   for (let i = 0; i < med.length; i++) med[i] = ((med[i] - lo) * 255) / range;
-
   // inverzija: znamenke moraju biti tamne na svijetloj podlozi (većina piksela je podloga)
   let sum = 0;
   for (const v of med) sum += v;
-  const mean = sum / med.length;
-  const inverted = mean < 110;
+  const inverted = sum / med.length < 110;
   if (inverted) for (let i = 0; i < med.length; i++) med[i] = 255 - med[i];
-
   let out = med;
   if (opts.threshold) {
     const t = otsu(med);
     out = new Uint8ClampedArray(med.length);
     for (let i = 0; i < med.length; i++) out[i] = med[i] > t ? 255 : 0;
   }
-  for (let i = 0, j = 0; i < d.length; i += 4, j++) { d[i] = d[i + 1] = d[i + 2] = out[j]; d[i + 3] = 255; }
-  ctx.putImageData(img, 0, 0);
-  return { canvas: c, inverted, contrast: range / 255 };
+  return { gray: out, inverted, contrast: range / 255 };
+}
+
+/** Skaliranje sive slike (prosjek područja pri smanjenju, bilinearno pri povećanju). */
+export function scaleGray(gray: Uint8ClampedArray, w: number, h: number, tw: number, th: number): Uint8ClampedArray {
+  const out = new Uint8ClampedArray(tw * th);
+  for (let y = 0; y < th; y++) {
+    const sy = ((y + 0.5) * h) / th - 0.5;
+    const y0 = Math.max(0, Math.floor(sy)), y1 = Math.min(h - 1, y0 + 1), fy = sy - y0;
+    for (let x = 0; x < tw; x++) {
+      const sx = ((x + 0.5) * w) / tw - 0.5;
+      const x0 = Math.max(0, Math.floor(sx)), x1 = Math.min(w - 1, x0 + 1), fx = sx - x0;
+      const a = gray[y0 * w + x0], b = gray[y0 * w + x1], c = gray[y1 * w + x0], d = gray[y1 * w + x1];
+      out[y * tw + x] = (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy;
+    }
+  }
+  return out;
 }
 
 export function otsu(gray: Uint8ClampedArray): number {

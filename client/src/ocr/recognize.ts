@@ -2,7 +2,7 @@ import { createWorker, OEM, PSM, type Worker } from 'tesseract.js';
 import { parseBand, parseReading, type FieldGuess, type ParsedReading, type Token } from './parse.ts';
 import { TECHNICAL_RANGE } from '../types.ts';
 import { preprocess } from './preprocess.ts';
-import { classifyBand, emptyModel, inkFromGray, modelReady, segmentDigits, type Glyph, type OcrModelData } from './learn.ts';
+import { checkAlignment, classifyBand, emptyModel, inkFromGray, modelReady, segmentDigits, type BandDims, type Glyph, type OcrModelData } from './learn.ts';
 
 const PATHS = {
   workerPath: '/tesseract/worker.min.js',
@@ -46,7 +46,7 @@ function tokensOf(page: { blocks: { paragraphs: { lines: { words: { text: string
   return out;
 }
 
-export interface OcrResult extends ParsedReading { engine: string; debug: { digits: Token[]; text: Token[] }; preview: string; glyphs: Glyph[][]; variantWinner: (string | null)[]; learned: boolean[] }
+export interface OcrResult extends ParsedReading { engine: string; debug: { digits: Token[]; text: Token[] }; preview: string; glyphs: Glyph[][]; bandDims: BandDims[]; variantWinner: (string | null)[]; learned: boolean[]; alignmentWarnings: string[] }
 
 /**
  * Prepoznaje SYS/DIA/puls s izrezanog zaslona tlakomjera. Obrada je u cijelosti lokalna.
@@ -88,7 +88,7 @@ export async function recognizeDisplay(display: HTMLCanvasElement, onProgress?: 
   results.sort((a, b) => b.parsed.score - a.parsed.score);
   const best = results[0];
   onProgress?.('Gotovo', 1);
-  return { ...best.parsed, engine: best.engine, debug: { digits: best.digits, text: best.text }, preview, glyphs: [], variantWinner: [], learned: [] };
+  return { ...best.parsed, engine: best.engine, debug: { digits: best.digits, text: best.text }, preview, glyphs: [], bandDims: [], variantWinner: [], learned: [], alignmentWarnings: [] };
 }
 
 function sliceBand(src: HTMLCanvasElement, from: number, to: number): HTMLCanvasElement {
@@ -128,6 +128,8 @@ export async function recognizeBands(display: HTMLCanvasElement, dividers: [numb
   const guesses: FieldGuess[] = [];
   const debugTokens: Token[] = [];
   const glyphsPerBand: Glyph[][] = [];
+  const bandDims: BandDims[] = [];
+  const alignmentWarnings: string[] = [];
   const variantWinner: (string | null)[] = [];
   const learned: boolean[] = [];
   let engineUsed = '';
@@ -152,7 +154,10 @@ export async function recognizeBands(display: HTMLCanvasElement, dividers: [numb
     for (let k = 0, j = 0; k < bd.length; k += 4, j++) gray[j] = bd[k];
     const glyphs = segmentDigits(inkFromGray(gray, 128), bin.width, bin.height); // zona je već binarizirana (0/255)
     glyphsPerBand.push(glyphs);
-    const tpl = modelReady(model) ? classifyBand(glyphs, model, ranges[i]) : { value: null, confidence: 0, digits: [] };
+    bandDims.push({ w: bin.width, h: bin.height });
+    const align = checkAlignment(model, i, glyphs, { w: bin.width, h: bin.height });
+    if (align) alignmentWarnings.push(align);
+    const tpl = modelReady(model) ? classifyBand(glyphs, model, ranges[i]) : { value: null, confidence: 0, digits: [], used: [] };
     for (const { name, w } of workers) {
       await w.setParameters({ tessedit_pageseg_mode: PSM.SINGLE_LINE });
       for (let vi = 0; vi < variants.length; vi++) {
@@ -189,7 +194,7 @@ export async function recognizeBands(display: HTMLCanvasElement, dividers: [numb
   onProgress?.('Gotovo', 1);
   const preview = preprocess(display, { threshold: false, targetHeight: 400 }).canvas.toDataURL('image/png');
   (window as unknown as { __ocrDebug?: unknown }).__ocrDebug = { guesses, tokens: debugTokens, glyphs: glyphsPerBand.map((g) => g.map((x) => [x.x0, x.x1, x.y0, x.y1])), bandSizes: bounds.map(([a, b]) => [Math.round(display.height * a), Math.round(display.height * b)]) };
-  return { systolic, diastolic, pulse, score: (systolic.confidence + diastolic.confidence + pulse.confidence) / 3, warnings, engine: learned.some(Boolean) ? `${engineUsed || workers[0].name} + naučeni model` : engineUsed || workers[0].name, debug: { digits: debugTokens, text: [] }, preview, glyphs: glyphsPerBand, variantWinner, learned };
+  return { systolic, diastolic, pulse, score: (systolic.confidence + diastolic.confidence + pulse.confidence) / 3, warnings: [...alignmentWarnings, ...warnings], engine: learned.some(Boolean) ? `${engineUsed || workers[0].name} + naučeni model` : engineUsed || workers[0].name, debug: { digits: debugTokens, text: [] }, preview, glyphs: glyphsPerBand, bandDims, variantWinner, learned, alignmentWarnings };
 }
 
 export async function warmUpOcr(): Promise<void> {

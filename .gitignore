@@ -9,3 +9,5 @@ data/
 client/public/tesseract/
 .DS_Store
 *.log
+# stvarne fotografije tlakomjera za kalibraciju OCR-a (osobni podaci) – ne idu u repozitorij
+client/test/fixtures/real/
