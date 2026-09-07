@@ -16,6 +16,16 @@ import { findSession } from './NewMeasurement.tsx';
 
 type Stage = 'pick' | 'crop' | 'ocr' | 'confirm';
 
+/** Umanjena kopija cijele fotografije (dulja stranica 800 px) za dijagnostiku. */
+function thumbnail(c: HTMLCanvasElement): string {
+  try {
+    const k = Math.min(1, 800 / Math.max(c.width, c.height));
+    const t = document.createElement('canvas'); t.width = Math.round(c.width * k); t.height = Math.round(c.height * k);
+    t.getContext('2d')!.drawImage(c, 0, 0, t.width, t.height);
+    return t.toDataURL('image/jpeg', 0.6);
+  } catch { return ''; }
+}
+
 export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
   const { data, save, remove, auth } = useStore();
   const nav = useNavigate();
@@ -33,6 +43,11 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
   const modelData: OcrModelData = model ? { samples: model.samples, variantWins: model.variantWins, photos: model.photos, layout: model.layout, positions: model.positions || {} } : emptyModel();
   const [layoutApplied, setLayoutApplied] = useState(false);
   const [autoFound, setAutoFound] = useState<'auto' | 'memory' | null>(null);
+  /** Podrijetlo trenutačnog izreza: automatski, zapamćeni raspored ili ručno postavljen. */
+  const [origin, setOrigin] = useState<'auto' | 'memory' | 'manual'>('manual');
+  const [autoNotice, setAutoNotice] = useState<string | null>(null);
+  const autoInfo = useRef<unknown>(null);
+  const [thumb, setThumb] = useState<string>('');
   // Opcija: nakon spremanja odmah nova fotografija (serija mjerenja). Pamti se na ovom uređaju.
   const [series, setSeries] = useState<boolean>(() => { try { return localStorage.getItem('tlak.photoSeries') === '1'; } catch { return false; } });
   const toggleSeries = (v: boolean) => { setSeries(v); try { localStorage.setItem('tlak.photoSeries', v ? '1' : '0'); } catch { /* ignore */ } };
@@ -82,26 +97,34 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
       const c = toCanvas(img, 1600);
       setSource(c);
       setRotation(0);
-      // 1) automatsko pronalaženje redova znamenki na cijeloj fotografiji; 2) zapamćeni raspored; 3) ručni izrez
-      const found = detectDisplay(c);
-      if (found) {
-        setRect(found.rect); setDividers(found.dividers); setLayoutApplied(false); setAutoFound('auto');
-        void runOcrWith(c, found.rect, found.dividers);
-        return;
-      }
-      applyLayout(c, model);
-      if (model?.layout) {
-        setAutoFound('memory');
-        const l = model.layout;
-        void runOcrWith(c, { x: l.rect.x * c.width, y: l.rect.y * c.height, w: l.rect.w * c.width, h: l.rect.h * c.height }, l.dividers);
-        return;
-      }
-      setAutoFound(null);
+      setAutoNotice(null);
+      setThumb(thumbnail(c));
       if (mode === 'gallery') {
         const d = await exifDate(file);
         if (d) { setDate(toInputDate(d)); setTime(toInputTime(d)); setDateSrc('exif'); }
         else { const n = new Date(); setDate(toInputDate(n)); setTime(toInputTime(n)); setDateSrc('now'); }
       } else { const n = new Date(); setDate(toInputDate(n)); setTime(toInputTime(n)); setDateSrc('now'); }
+      // 1) automatsko pronalaženje redova znamenki; 2) zapamćeni raspored; 3) ručni izrez.
+      // Svaki automatski pokušaj prolazi samo ako su SYS i DIA pouzdano pročitani; inače slijedi idući korak.
+      const attempts: { origin: 'auto' | 'memory'; rect: Rect; dividers: [number, number] }[] = [];
+      const found = detectDisplay(c);
+      if (found) attempts.push({ origin: 'auto', rect: found.rect, dividers: found.dividers });
+      if (model?.layout) {
+        const l = model.layout;
+        attempts.push({ origin: 'memory', rect: { x: l.rect.x * c.width, y: l.rect.y * c.height, w: l.rect.w * c.width, h: l.rect.h * c.height }, dividers: l.dividers });
+      }
+      for (const a of attempts) {
+        setRect(a.rect); setDividers(a.dividers); setLayoutApplied(a.origin === 'memory'); setAutoFound(a.origin); setOrigin(a.origin);
+        const ok = await runOcrWith(c, a.rect, a.dividers, a.origin);
+        if (ok) return;
+      }
+      // Ni jedan automatski pokušaj nije bio pouzdan: ručni izrez, s najboljim dosad poznatim okvirom kao početnim.
+      setAutoFound(null); setOrigin('manual');
+      if (attempts.length) {
+        const a = attempts[0];
+        setRect(a.rect); setDividers(a.dividers); setLayoutApplied(false);
+        setAutoNotice(a.origin === 'auto' ? 'Automatski izrez nije dao pouzdano očitanje, zato provjerite i prilagodite okvir i horizontale.' : 'Zapamćeni raspored nije dao pouzdano očitanje, zato prilagodite okvir i horizontale.');
+      } else applyLayout(c, model);
       setStage('crop');
     } catch (e) {
       setError((e as Error).message);
@@ -114,7 +137,8 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
       const d = c.getContext('2d', { willReadFrequently: true })!.getImageData(0, 0, c.width, c.height).data;
       const gray = new Uint8ClampedArray(c.width * c.height);
       for (let i = 0, j = 0; i < d.length; i += 4, j++) gray[j] = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000;
-      const r = autoDetect(gray, c.width, c.height);
+      autoInfo.current = null;
+      const r = autoDetect(gray, c.width, c.height, (info) => { autoInfo.current = info; });
       if (!r) return null;
       return { rect: { x: r.rect.x * c.width, y: r.rect.y * c.height, w: r.rect.w * c.width, h: r.rect.h * c.height }, dividers: r.dividers };
     } catch (e) {
@@ -123,21 +147,27 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
     }
   };
 
-  const runOcr = () => runOcrWith(source, rect, dividers);
-  const runOcrWith = async (src: HTMLCanvasElement | null, r0: Rect, div: [number, number]) => {
-    if (!src) return;
+  const runOcr = () => { setOrigin('manual'); setAutoFound(null); setAutoNotice(null); void runOcrWith(source, rect, dividers, 'manual'); };
+  /** Automatski izrez vrijedi samo ako su SYS i DIA pročitani dovoljno pouzdano i bez upozorenja o pomaknutom okviru. */
+  const reliable = (r: OcrResult) => r.systolic.value !== null && r.diastolic.value !== null && r.systolic.confidence >= 55 && r.diastolic.confidence >= 55 && r.alignmentWarnings.length === 0 && r.systolic.value > r.diastolic.value;
+  const runOcrWith = async (src: HTMLCanvasElement | null, r0: Rect, div: [number, number], from: 'auto' | 'memory' | 'manual'): Promise<boolean> => {
+    if (!src) return false;
     setStage('ocr');
     try {
       const display = cropRotate(src, r0, 0);
       const r = await recognizeBands(display, div, (s, p) => setProgress({ stage: s, p }), modelData);
+      if (from !== 'manual' && !reliable(r)) return false;
       if (r.dividers) setDividers(r.dividers); // horizontale privučene na prazne retke ostaju zapamćene
       setResult(r);
       setSys(r.systolic.value); setDia(r.diastolic.value); setPulse(r.pulse.value);
       setMsgs([]); setConfirmed(false);
       setStage('confirm');
+      return true;
     } catch (e) {
+      if (from !== 'manual') return false;
       setError((e as Error).message);
       setStage('crop');
+      return false;
     }
   };
 
@@ -161,16 +191,24 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
       let md = { ...modelData, samples: { ...modelData.samples }, variantWins: { ...modelData.variantWins } };
       const confirmedValues = [String(sys), String(dia), pulse === null ? '' : String(pulse)];
       const ocrValues = [result.systolic.value, result.diastolic.value, result.pulse.value];
+      // Izrez je pouzdan ako ga je korisnik postavio ručno ili ako je OCR pogodio bar SYS ili DIA.
+      // Iz nepouzdanog (automatskog, a pogrešnog) izreza uče se samo zone koje je OCR pogodio, da krivi izrez ne pokvari model.
+      const cropTrusted = origin === 'manual' || ocrValues[0] === sys || ocrValues[1] === dia;
+      let learnedBands = 0;
       confirmedValues.forEach((v, i) => {
         if (!v) return; // puls nije unesen: bez učenja za tu zonu
+        if (!cropTrusted && ocrValues[i] !== Number(v)) return;
+        const before = sampleCount(md);
         md = learn(md, result.glyphs[i] || [], v, result.bandDims[i], i);
+        if (sampleCount(md) !== before) learnedBands += 1;
         const win = result.variantWinner[i];
         if (win && ocrValues[i] === Number(v)) md.variantWins[win] = (md.variantWins[win] || 0) + 1;
       });
-      md.photos += 1;
-      md.layout = { rect: { x: rect.x / source.width, y: rect.y / source.height, w: rect.w / source.width, h: rect.h / source.height }, dividers };
-      await save('ocrModels', { id: model?.id || deviceId, deviceId, ...md });
-      try { localStorage.setItem('tlak.lastLearn', `${new Date().toISOString()} ok photos=${md.photos}`); } catch { /* ignore */ }
+      if (learnedBands > 0) md.photos += 1;
+      if (cropTrusted) md.layout = { rect: { x: rect.x / source.width, y: rect.y / source.height, w: rect.w / source.width, h: rect.h / source.height }, dividers };
+      if (learnedBands > 0 || cropTrusted) await save('ocrModels', { id: model?.id || deviceId, deviceId, ...md });
+      try { localStorage.setItem('tlak.lastLearn', `${new Date().toISOString()} ${learnedBands > 0 ? 'ok' : 'skip'} origin=${origin} trusted=${cropTrusted} bands=${learnedBands} photos=${md.photos}`); } catch { /* ignore */ }
+      if (learnedBands === 0) toast.show('Iz ove fotografije aplikacija nije učila: izrez nije bio pouzdan. Za učenje koristite „Ispravi izrez”.');
       } catch (e) {
         try { localStorage.setItem('tlak.lastLearn', `${new Date().toISOString()} ERR ${(e as Error).message}`); } catch { /* ignore */ }
         toast.show(`Učenje OCR-a nije uspjelo: ${(e as Error).message}`);
@@ -240,15 +278,16 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
   const exportDiagnostics = async () => {
     if (!result) return;
     const pkg = {
-      app: 'tlak-ocr-diagnostics', version: 1, createdAt: new Date().toISOString(),
+      app: 'tlak-ocr-diagnostics', version: 2, createdAt: new Date().toISOString(),
       device: data.devices.find((d) => d.id === deviceId)?.name || null,
       confirmed: { systolic: sys, diastolic: dia, pulse },
       ocr: { systolic: result.systolic, diastolic: result.diastolic, pulse: result.pulse, engine: result.engine, warnings: result.warnings, variantWinner: result.variantWinner },
-      layout: { rect: source ? { x: rect.x / source.width, y: rect.y / source.height, w: rect.w / source.width, h: rect.h / source.height } : null, dividers },
+      layout: { rect: source ? { x: rect.x / source.width, y: rect.y / source.height, w: rect.w / source.width, h: rect.h / source.height } : null, dividers, origin, autoDetect: autoInfo.current },
+      photo: thumb,
       tokens: result.debug.digits,
       glyphs: result.glyphs.map((g) => g.map((x) => ({ x0: x.x0, x1: x.x1, y0: x.y0, y1: x.y1, bits: bitsToBase64(x.bits) }))),
       bandDims: result.bandDims,
-      model: { samples: Object.fromEntries(Object.entries(modelData.samples).map(([k, v]) => [k, v.length])), photos: modelData.photos, positions: modelData.positions || {} },
+      model: { samples: Object.fromEntries(Object.entries(modelData.samples).map(([k, v]) => [k, v.length])), bitmaps: modelData.samples, variantWins: modelData.variantWins, photos: modelData.photos, layout: modelData.layout, positions: modelData.positions || {} },
       learning: { deviceId, modelRecords: data.ocrModels.map((m) => ({ id: m.id, deviceId: m.deviceId, photos: m.photos })), lastLearn: (() => { try { return localStorage.getItem('tlak.lastLearn'); } catch { return null; } })(), auth: !!auth },
       images: result.diagnostics,
     };
@@ -293,6 +332,7 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
       {stage === 'crop' && source && (
         <div className="card">
           {devicePicker}
+          {autoNotice && <Message level="check">{autoNotice}</Message>}
           <p className="small muted">{layoutApplied ? 'Okvir i horizontale postavljeni su prema prošlom čitanju ovog tlakomjera; po potrebi ih prilagodite.' : 'Povucite rubove ili kutove okvira oko zaslona tlakomjera, a žute horizontale postavite tako da odvajaju redove SYS, DIA i puls. Svaka zona čita se zasebno.'}</p>
           <div className="photo-stage" ref={stageRef} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
             <CanvasView canvas={source} />
@@ -326,7 +366,7 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
       {stage === 'confirm' && result && (
         <form className="card" onSubmit={(e) => { e.preventDefault(); void onSave(); }}>
           <img src={result.preview} alt="Izrezani zaslon tlakomjera (obrađen)" style={{ width: '100%', borderRadius: 10, border: '1px solid var(--border)' }} />
-          {autoFound && <p className="tiny">{autoFound === 'auto' ? 'Zaslon je pronađen automatski na fotografiji.' : 'Korišten je zapamćeni raspored ovog tlakomjera.'} Ako izrez nije dobar, koristite „Ispravi izrez”.</p>}
+          {autoFound && <p className="tiny">{autoFound === 'auto' ? 'Zaslon je pronađen automatski na fotografiji.' : 'Korišten je zapamćeni raspored ovog tlakomjera.'} Provjerite obrađeni izrez iznad: ako brojke nisu jasno vidljive, koristite „Ispravi izrez”.</p>}
           {(result.systolic.value === null || result.diastolic.value === null || result.pulse.value === null) && (
             <Message level="check">Neke vrijednosti nisu pouzdano prepoznate i nisu popunjene. Unesite ih ručno prema fotografiji.</Message>
           )}

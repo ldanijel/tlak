@@ -130,6 +130,18 @@ createdAt, updatedAt) i ostaje mapljiv na HealthKit/Health Connect.
   promjena sinkronizacija odmah osvježava lokalno stanje (`store.unsynced`). Odabir tlakomjera dostupan je i na ekranu potvrde
   (kad je zaslon pronađen automatski, bez ručnog izreza).
 
+## Verzija 1.5
+
+- Automatski izrez više se ne prihvaća slijepo: nakon automatskog pronalaženja zaslona (i nakon zapamćenog rasporeda) očitanje
+  vrijedi samo ako su SYS i DIA pročitani s pouzdanošću ≥ 55 %, bez upozorenja o pomaknutom okviru i uz SYS > DIA. Inače se
+  pokušava idući izvor (auto → zapamćeni raspored → ručni izrez), a ekran izreza objašnjava zašto je otvoren.
+- Učenje samo iz pouzdanih izreza: ručno postavljen okvir ili automatski izrez u kojem je OCR pogodio bar SYS ili DIA. Iz
+  nepouzdanog izreza uče se samo zone koje je OCR pogodio, raspored se ne pamti, a korisnik dobiva poruku da se iz te fotografije
+  nije učilo. Time pogrešan automatski izrez ne kvari naučeni model.
+- EXIF datum fotografije koristi se i kad je zaslon pronađen automatski (prije samo pri ručnom izrezu).
+- Dijagnostika OCR-a (verzija 2) uključuje umanjenu cijelu fotografiju, podrijetlo izreza, međurezultate automatskog
+  pronalaženja i potpune bitmape naučenih znamenki.
+
 ## Pozivni kod i preporučeni hosting (Fly.io)
 
 - `INVITE_CODE` (varijabla okoline ili `fly secrets set INVITE_CODE=…`): kad je postavljen, registracija traži pozivni kod, pa račun
