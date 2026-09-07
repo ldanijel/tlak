@@ -17,7 +17,7 @@ export interface Measurement extends SyncBase {
   timezone: string; // IANA zona u trenutku mjerenja
   systolic: number;
   diastolic: number;
-  pulse: number;
+  pulse: number | null; // neobvezno
   source: Source;
   period: Period;
   sessionId: string | null;

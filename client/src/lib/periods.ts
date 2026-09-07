@@ -1,10 +1,13 @@
 import type { Period } from '../types.ts';
 
-export type RangeKey = '7d' | '28d' | '90d' | '180d' | '1y' | 'ytd' | 'all' | 'custom';
+export type RangeKey = 'day' | 'week' | 'month' | '3m' | '6m' | 'year' | 'all' | 'custom';
 
+/** Kratke oznake za zaslon (D / T / M / 3M / 6M / G) i puni nazivi za pristupačnost. */
+export const RANGE_SHORT: Record<RangeKey, string> = { day: 'D', week: 'T', month: 'M', '3m': '3M', '6m': '6M', year: 'G', all: 'Sve', custom: '…' };
 export const RANGE_LABEL: Record<RangeKey, string> = {
-  '7d': '7 dana', '28d': '4 tjedna', '90d': '3 mjeseca', '180d': '6 mjeseci', '1y': '1 godina', ytd: 'Tekuća godina', all: 'Sve', custom: 'Prilagođeno',
+  day: 'Dan', week: 'Tjedan', month: 'Mjesec', '3m': '3 mjeseca', '6m': '6 mjeseci', year: 'Godina', all: 'Sve', custom: 'Prilagođeno',
 };
+export const MAIN_RANGES: RangeKey[] = ['day', 'week', 'month', '3m', '6m', 'year'];
 
 export interface DateRange { from: Date; to: Date }
 
@@ -34,12 +37,12 @@ export function resolveRange(key: RangeKey, now = new Date(), custom?: DateRange
     return { from, to };
   };
   switch (key) {
-    case '7d': return days(7);
-    case '28d': return days(28);
-    case '90d': return days(90);
-    case '180d': return days(180);
-    case '1y': return days(365);
-    case 'ytd': return { from: new Date(now.getFullYear(), 0, 1), to };
+    case 'day': return days(1);
+    case 'week': return days(7);
+    case 'month': return days(30);
+    case '3m': return days(90);
+    case '6m': return days(180);
+    case 'year': return days(365);
     case 'all': return { from: earliest ? startOfDay(earliest) : new Date(2000, 0, 1), to };
     case 'custom': return custom ? { from: startOfDay(custom.from), to: endOfDay(custom.to) } : days(7);
   }

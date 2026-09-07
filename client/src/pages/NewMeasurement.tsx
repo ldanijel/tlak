@@ -64,7 +64,7 @@ export function NewMeasurementPage() {
     const rec: Omit<Measurement, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'> & { id?: string } = {
       id: editing?.id,
       measuredAt, timezone: editing?.timezone || currentTimezone(),
-      systolic: sys!, diastolic: dia!, pulse: pulse!,
+      systolic: sys!, diastolic: dia!, pulse,
       source: editing?.source ?? prefill.source ?? 'manual',
       period, sessionId: editing?.sessionId ?? findSession(measuredAt, data.measurements, data.settings.sessionWindowMinutes),
       armLocation: arm, bodyPosition: pos, medicationTiming: timing, deviceId: deviceId || null,
@@ -78,7 +78,7 @@ export function NewMeasurementPage() {
       toast.show('Mjerenje je ažurirano.');
       nav(`/measurement/${saved.id}`, { replace: true });
     } else {
-      toast.show(`Mjerenje ${saved.systolic}/${saved.diastolic}, puls ${saved.pulse} spremljeno.`, { actionLabel: 'Poništi', onAction: () => { void remove('measurements', saved.id); toast.show('Mjerenje je poništeno.'); } });
+      toast.show(`Mjerenje ${saved.systolic}/${saved.diastolic}${saved.pulse !== null ? `, puls ${saved.pulse}` : ''} spremljeno.`, { actionLabel: 'Poništi', onAction: () => { void remove('measurements', saved.id); toast.show('Mjerenje je poništeno.'); } });
       nav('/', { replace: true });
     }
   };
@@ -116,7 +116,7 @@ export function NewMeasurementPage() {
         <div className="grid3">
           <div className={`field bigfield sys ${lowConf('systolic') ? 'flag' : ''}`}><label>SYS<NumberInput ref={sysRef} value={sys} onChange={(v) => { setSys(v); setMsgs([]); setConfirmed(false); }} onKeyDown={keyNext(diaRef)} aria-describedby="sys-u" required /></label><span id="sys-u" className="unit">mmHg{lowConf('systolic') && ' · provjerite'}</span></div>
           <div className={`field bigfield dia ${lowConf('diastolic') ? 'flag' : ''}`}><label>DIA<NumberInput ref={diaRef} value={dia} onChange={(v) => { setDia(v); setMsgs([]); setConfirmed(false); }} onKeyDown={keyNext(pulseRef)} required /></label><span className="unit">mmHg{lowConf('diastolic') && ' · provjerite'}</span></div>
-          <div className={`field bigfield pulse ${lowConf('pulse') ? 'flag' : ''}`}><label>Puls<NumberInput ref={pulseRef} value={pulse} onChange={(v) => { setPulse(v); setMsgs([]); setConfirmed(false); }} onKeyDown={keyNext(saveRef)} enterKeyHint="done" required /></label><span className="unit">otk./min{lowConf('pulse') && ' · provjerite'}</span></div>
+          <div className={`field bigfield pulse ${lowConf('pulse') ? 'flag' : ''}`}><label>Puls<NumberInput ref={pulseRef} value={pulse} onChange={(v) => { setPulse(v); setMsgs([]); setConfirmed(false); }} onKeyDown={keyNext(saveRef)} enterKeyHint="done" placeholder="–" /></label><span className="unit">otk./min · neobvezno{lowConf('pulse') && ' · provjerite'}</span></div>
         </div>
         <div className="grid2">
           <Field label="Datum"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} required /></Field>

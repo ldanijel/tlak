@@ -48,7 +48,7 @@ export function summarize(all: Measurement[], range: DateRange, targets: Target[
   const cur = {
     sys: minAvgMax(inc.map((m) => m.systolic)),
     dia: minAvgMax(inc.map((m) => m.diastolic)),
-    pulse: minAvgMax(inc.map((m) => m.pulse)),
+    pulse: minAvgMax(inc.map((m) => m.pulse).filter((p): p is number => p !== null)),
   };
   let delta: Summary['delta'] = null;
   if (withDelta) {
@@ -105,7 +105,7 @@ export function groupSessions(ms: Measurement[], windowMinutes = 10): Session[] 
       measurements: current,
       sys: minAvgMax(inc.map((m) => m.systolic)),
       dia: minAvgMax(inc.map((m) => m.diastolic)),
-      pulse: minAvgMax(inc.map((m) => m.pulse)),
+      pulse: minAvgMax(inc.map((m) => m.pulse).filter((p): p is number => p !== null)),
       spanMinutes: Math.round((last - first) / 60000),
     });
     current = [];
@@ -136,7 +136,7 @@ export function movingAverage(points: { t: number; v: number }[], windowDays = 7
 }
 
 /** Dnevni prosjeci (za usporedbu CSV-a i grafa). */
-export function dailyAverages(ms: Measurement[]): { day: string; sys: number; dia: number; pulse: number; n: number }[] {
+export function dailyAverages(ms: Measurement[]): { day: string; sys: number; dia: number; pulse: number | null; n: number }[] {
   const map = new Map<string, Measurement[]>();
   for (const m of analyzed(ms)) {
     const k = localDayKey(m.measuredAt);
@@ -146,7 +146,7 @@ export function dailyAverages(ms: Measurement[]): { day: string; sys: number; di
     day,
     sys: minAvgMax(list.map((m) => m.systolic)).avg!,
     dia: minAvgMax(list.map((m) => m.diastolic)).avg!,
-    pulse: minAvgMax(list.map((m) => m.pulse)).avg!,
+    pulse: minAvgMax(list.map((m) => m.pulse).filter((p): p is number => p !== null)).avg,
     n: list.length,
   }));
 }

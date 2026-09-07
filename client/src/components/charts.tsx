@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState } from 'react';
 import type { HealthEvent, Measurement, Target } from '../types.ts';
 import { fmtDateTime, fmtNum, fmtShortDate } from '../lib/format.ts';
+import { categorizeValue } from '../lib/categories.ts';
+import type { CategoryThresholds } from '../types.ts';
 import { movingAverage } from '../lib/stats.ts';
 import { boundsFor, targetFor } from '../lib/targets.ts';
 import { EVENT_LABEL } from '../lib/labels.ts';
@@ -58,16 +60,16 @@ export function CategoryBar({ counts }: { counts: { normal: number; elevated: nu
 type SeriesKey = 'systolic' | 'diastolic' | 'pulse';
 interface Pt { t: number; v: number; m: Measurement; key: SeriesKey }
 
-export function TimeChart({ measurements, range, targets, events = [], series, showMovingAverage, height = 240, title }: {
+export function TimeChart({ measurements, range, targets, events = [], series, showMovingAverage, height = 240, title, categories }: {
   measurements: Measurement[]; range: DateRange; targets: Target[]; events?: HealthEvent[];
-  series: SeriesKey[]; showMovingAverage?: boolean; height?: number; title: string;
+  series: SeriesKey[]; showMovingAverage?: boolean; height?: number; title: string; categories?: CategoryThresholds;
 }) {
   const W = 640, H = height, padL = 36, padR = 10, padT = 14, padB = 26;
   const wrapRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<{ x: number; y: number; m: Measurement } | null>(null);
   const t0 = range.from.getTime(), t1 = range.to.getTime();
   const ms = useMemo(() => measurements.filter((m) => { const t = new Date(m.measuredAt).getTime(); return t >= t0 && t <= t1; }).sort((a, b) => a.measuredAt.localeCompare(b.measuredAt)), [measurements, t0, t1]);
-  const pts: Pt[] = useMemo(() => ms.flatMap((m) => series.map((key) => ({ t: new Date(m.measuredAt).getTime(), v: m[key], m, key }))), [ms, series]);
+  const pts: Pt[] = useMemo(() => ms.flatMap((m) => series.map((key) => ({ t: new Date(m.measuredAt).getTime(), v: m[key], m, key })).filter((p): p is Pt => p.v !== null)), [ms, series]);
 
   // Ciljne zone po razdobljima važenja (samo za SYS/DIA graf).
   const zones = useMemo(() => {
@@ -149,9 +151,11 @@ export function TimeChart({ measurements, range, targets, events = [], series, s
           if (ma.length < 2) return null;
           return <path key={`ma-${k}`} className={`line avg ${k === 'systolic' ? 'sys' : k === 'diastolic' ? 'dia' : 'pulse'}`} d={ma.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join(' ')} />;
         })}
-        {pts.map((p, i) => (
-          <circle key={i} className={`dot ${p.m.includedInAverage ? (p.key === 'systolic' ? 'sys' : p.key === 'diastolic' ? 'dia' : 'pulse') : 'excluded'}`} cx={x(p.t)} cy={y(p.v)} r={pts.length > 120 ? 3 : 4} />
-        ))}
+        {pts.map((p, i) => {
+          // točke SYS i DIA obojene kategorijom te vrijednosti (zasebno za SYS i DIA); puls neutralno
+          const cat = categories && p.key !== 'pulse' ? `cat-${categorizeValue(p.key === 'systolic' ? 'sys' : 'dia', p.v, categories)}` : (p.key === 'systolic' ? 'sys' : p.key === 'diastolic' ? 'dia' : 'pulse');
+          return <circle key={i} className={`dot ${p.m.includedInAverage ? cat : 'excluded'}`} cx={x(p.t)} cy={y(p.v)} r={pts.length > 120 ? 3 : 4} />;
+        })}
         {hover && (
           <g className="cross"><line x1={hover.x} x2={hover.x} y1={padT} y2={H - padB} /></g>
         )}
@@ -159,11 +163,15 @@ export function TimeChart({ measurements, range, targets, events = [], series, s
       {hover && (
         <div className="tooltip" style={{ left: `${(hover.x / W) * 100}%`, top: 0, transform: hover.x > W * 0.6 ? 'translateX(-105%)' : 'translateX(8px)' }}>
           <div><strong>{fmtDateTime(hover.m.measuredAt)}</strong></div>
-          <div>{series.map((k) => `${labelOf(k)} ${hover.m[k]}`).join(' · ')}{!hover.m.includedInAverage && ' · isključeno'}</div>
+          <div>{series.map((k) => `${labelOf(k)} ${hover.m[k] ?? '–'}`).join(' · ')}{!hover.m.includedInAverage && ' · isključeno'}</div>
         </div>
       )}
       <div className="legend" aria-hidden="true">
-        {series.map((k) => <span key={k}><i style={{ background: colorOf(k) }} />{labelOf(k)}</span>)}
+        {categories && series.includes('systolic') ? (
+          <>
+            <span>● Nepovišen</span><span style={{ color: 'var(--cat-elevated)' }}>▲ Povišen</span><span style={{ color: 'var(--cat-high)' }}>■ Visok</span><span style={{ color: 'var(--cat-veryhigh-bg)' }}>‼ Vrlo visok</span><span>(gornje točke SYS, donje DIA)</span>
+          </>
+        ) : series.map((k) => <span key={k}><i style={{ background: colorOf(k) }} />{labelOf(k)}</span>)}
         {zones.length > 0 && <span><i style={{ background: 'var(--target-zone)', height: 10, border: '1px solid var(--border)' }} />ciljni raspon</span>}
         {showMovingAverage && <span><i style={{ background: 'var(--text-3)' }} />7-dnevni pomični prosjek (izračun)</span>}
         <span><i style={{ background: 'var(--surface)', border: '1px solid var(--text-3)', height: 8, width: 8, borderRadius: 4 }} />isključeno iz prosjeka</span>

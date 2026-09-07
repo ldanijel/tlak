@@ -31,6 +31,10 @@ export interface Store {
   saveMany<C extends Collection>(c: C, recs: NewRecord<CollectionMap[C]>[]): Promise<void>;
   remove(c: Collection, id: string): Promise<void>;
   restore(c: Collection, id: string): Promise<void>;
+  removeMany(c: Collection, ids: string[]): Promise<void>;
+  restoreMany(c: Collection, ids: string[]): Promise<void>;
+  /** Tvornički reset ovog uređaja: briše lokalnu bazu, prijavu, PIN i postavke uređaja. Podaci na računu ostaju. */
+  factoryReset(): Promise<void>;
   updateSettings(patch: Partial<Settings>): Promise<void>;
   setAuth(a: AuthState | null, opts?: { clearLocal?: boolean }): Promise<void>;
   restoreBackup(b: Backup, mode: 'merge' | 'replace'): Promise<void>;
@@ -129,6 +133,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     await write(c, [{ ...r, deletedAt: null, updatedAt: new Date().toISOString(), dirty: 1 } as never]);
   }, [write]);
 
+  const removeMany = useCallback(async (c: Collection, ids: string[]) => {
+    const now = new Date().toISOString();
+    const set = new Set(ids);
+    const recs = raw.current[c].filter((x) => set.has(x.id) && !x.deletedAt).map((r) => ({ ...r, deletedAt: now, updatedAt: now, dirty: 1 }));
+    if (recs.length) await write(c, recs as never);
+  }, [write]);
+
+  const restoreMany = useCallback(async (c: Collection, ids: string[]) => {
+    const now = new Date().toISOString();
+    const set = new Set(ids);
+    const recs = raw.current[c].filter((x) => set.has(x.id) && x.deletedAt).map((r) => ({ ...r, deletedAt: null, updatedAt: now, dirty: 1 }));
+    if (recs.length) await write(c, recs as never);
+  }, [write]);
+
+  const factoryReset = useCallback(async () => {
+    saveAuth(null);
+    setAuthState(null);
+    await clearAllData();
+    try { for (const k of Object.keys(localStorage)) if (k.startsWith('tlak.')) localStorage.removeItem(k); } catch { /* ignore */ }
+    await resetSyncCursor();
+    await reload();
+  }, [reload]);
+
   const updateSettings = useCallback(async (patch: Partial<Settings>) => {
     const cur = raw.current.settings.find((s) => s.id === 'main');
     const base = cur ? (cur as unknown as Settings) : defaultSettings();
@@ -186,8 +213,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setLastBackupAt(now);
   }, []);
 
-  const value = useMemo<Store>(() => ({ ready, data, sync, auth, lastBackupAt, save, saveMany, remove, restore, updateSettings, setAuth, restoreBackup, markBackup, reload }),
-    [ready, data, sync, auth, lastBackupAt, save, saveMany, remove, restore, updateSettings, setAuth, restoreBackup, markBackup, reload]);
+  const value = useMemo<Store>(() => ({ ready, data, sync, auth, lastBackupAt, save, saveMany, remove, restore, removeMany, restoreMany, factoryReset, updateSettings, setAuth, restoreBackup, markBackup, reload }),
+    [ready, data, sync, auth, lastBackupAt, save, saveMany, remove, restore, removeMany, restoreMany, factoryReset, updateSettings, setAuth, restoreBackup, markBackup, reload]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

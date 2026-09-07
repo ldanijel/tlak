@@ -116,6 +116,16 @@ createdAt, updatedAt) i ostaje mapljiv na HealthKit/Health Connect.
   preglednika) i ispisuje točnost Tesseracta, naučenog modela (leave-one-out) i kombinacije. Mapa `client/test/fixtures/real/` je u
   `.gitignore` jer su fotografije osobni podaci.
 
+## Verzija 1.4
+
+- Puls je neobvezan (prazno polje, `pulse: null`; prosjeci i graf ga preskaču, CSV ga izvozi prazno i uvozi prazno).
+- Unos u jednoj boji; pri prikazu SYS i DIA obojeni svaki svojom ESC kategorijom (zeleno / žuto / crveno / tamnocrveno),
+  puls neutralno. Na grafu točke nose boju kategorije, linije su neutralne.
+- Razdoblja D / T / M / 3M / 6M / G (dan, 7, 30, 90, 180, 365 dana) kao kratki izbornik na Početnoj, u Analizi i Izvještaju.
+- Povijest: „Izbriši više…” sa SVE / SVE OD: / SVE DO: / RASPON OD–DO, s brojem pogođenih i gumbom „Vrati”.
+- Postavke: „Tvornički reset” ovog uređaja (potvrda riječju RESET); podaci na računu ostaju.
+- Stranica `/upute` za ukućane, s dijeljenjem linka iz Postavki.
+
 ## Pozivni kod i preporučeni hosting (Fly.io)
 
 - `INVITE_CODE` (varijabla okoline ili `fly secrets set INVITE_CODE=…`): kad je postavljen, registracija traži pozivni kod, pa račun

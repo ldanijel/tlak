@@ -6,7 +6,7 @@ import { ARM_LABEL, PERIOD_LABEL, POSITION_LABEL, SOURCE_LABEL, TIMING_LABEL } f
 import { classify, STATUS_LABEL, targetFor, boundsFor } from '../lib/targets.ts';
 import { groupSessions, meanArterialPressure, pulsePressure } from '../lib/stats.ts';
 import { Badge, Confirm, Message, useToast } from '../components/ui.tsx';
-import { categorize, CATEGORY_ICON, CATEGORY_LABEL, categoryRangeText } from '../lib/categories.ts';
+import { categorize, categorizeValue, CATEGORY_ICON, CATEGORY_LABEL, categoryRangeText } from '../lib/categories.ts';
 
 export function MeasurementDetailPage() {
   const { id } = useParams();
@@ -47,9 +47,9 @@ export function MeasurementDetailPage() {
       <div className="page-header"><h1>Mjerenje</h1><Link to="/history" className="btn small">← Povijest</Link></div>
       <section className="card">
         <div className="reading">
-          <div className="sys"><div className="l">SYS</div><div className="v">{m.systolic}</div><div className="u">mmHg</div></div>
-          <div className="dia"><div className="l">DIA</div><div className="v">{m.diastolic}</div><div className="u">mmHg</div></div>
-          <div className="pulse"><div className="l">Puls</div><div className="v">{m.pulse}</div><div className="u">otk./min</div></div>
+          <div className="sys"><div className="l">SYS</div><div className={`v val-${categorizeValue('sys', m.systolic, data.settings.categories)}`}>{m.systolic}</div><div className="u">mmHg</div></div>
+          <div className="dia"><div className="l">DIA</div><div className={`v val-${categorizeValue('dia', m.diastolic, data.settings.categories)}`}>{m.diastolic}</div><div className="u">mmHg</div></div>
+          <div className="pulse"><div className="l">Puls</div><div className="v val-neutral">{m.pulse ?? '–'}</div><div className="u">otk./min</div></div>
         </div>
         <p style={{ textAlign: 'center' }} className="tabular">{fmtDateTime(m.measuredAt)} · {PERIOD_LABEL[m.period]}</p>
         <div className="row" style={{ justifyContent: 'center' }}>
@@ -90,7 +90,7 @@ export function MeasurementDetailPage() {
             {session.measurements.map((x, i) => (
               <tr key={x.id}>
                 <td className="tabular">{fmtDateTime(x.measuredAt).slice(-5)}{x.id === m.id && ' ◀'}</td>
-                <td className="tabular">{x.systolic}/{x.diastolic}</td><td className="tabular">{x.pulse}</td>
+                <td className="tabular">{x.systolic}/{x.diastolic}</td><td className="tabular">{x.pulse ?? '–'}</td>
                 <td className="tabular">{i ? `+${Math.round((new Date(x.measuredAt).getTime() - new Date(session.measurements[i - 1].measuredAt).getTime()) / 60000)} min` : '–'}</td>
                 <td>{x.includedInAverage ? 'uključeno' : `isključeno (${x.exclusionReason || '–'})`}</td>
               </tr>

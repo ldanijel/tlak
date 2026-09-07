@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useStore } from '../store.tsx';
 import { fmtDate, fmtDateTime, fmtNum, fmtTime, toInputDate } from '../lib/format.ts';
-import { RANGE_LABEL, resolveRange, inRange, type RangeKey } from '../lib/periods.ts';
+import { MAIN_RANGES, RANGE_LABEL, RANGE_SHORT, resolveRange, inRange, type RangeKey } from '../lib/periods.ts';
 import { summarize } from '../lib/stats.ts';
 import { toCsv } from '../lib/csv.ts';
 import { makeBackup } from '../lib/backup.ts';
@@ -11,12 +11,12 @@ import { Segmented, useToast } from '../components/ui.tsx';
 import { CategoryBar, TimeChart } from '../components/charts.tsx';
 import { categorize, CATEGORY_SHORT } from '../lib/categories.ts';
 
-const RANGES: RangeKey[] = ['7d', '28d', '90d', '180d', '1y', 'all', 'custom'];
+const RANGES: RangeKey[] = [...MAIN_RANGES, 'all', 'custom'];
 
 export function ReportPage() {
   const { data, markBackup } = useStore();
   const toast = useToast();
-  const [rangeKey, setRangeKey] = useState<RangeKey>('28d');
+  const [rangeKey, setRangeKey] = useState<RangeKey>('month');
   const [custom, setCustom] = useState({ from: toInputDate(new Date(Date.now() - 27 * 86400e3)), to: toInputDate(new Date()) });
   const [opts, setOpts] = useState({ profile: true, chart: true, list: true, notes: true, therapy: true });
   const earliest = data.measurements.length ? new Date(data.measurements[data.measurements.length - 1].measuredAt) : null;
@@ -39,7 +39,7 @@ export function ReportPage() {
       <div className="no-print">
         <h1>Izvještaj za liječnika</h1>
         <div className="card">
-          <Segmented value={rangeKey} onChange={setRangeKey} wrap label="Razdoblje" options={RANGES.map((r) => ({ value: r, label: RANGE_LABEL[r] }))} />
+          <Segmented value={rangeKey} onChange={setRangeKey} short label="Razdoblje" options={RANGES.map((r) => ({ value: r, label: RANGE_SHORT[r], title: RANGE_LABEL[r] }))} />
           {rangeKey === 'custom' && (
             <div className="grid2">
               <div className="field"><label>Od<input type="date" value={custom.from} onChange={(e) => setCustom({ ...custom, from: e.target.value })} /></label></div>
@@ -81,7 +81,7 @@ export function ReportPage() {
         {opts.chart && (
           <div className="card">
             <h3>Kretanje tlaka</h3>
-            <TimeChart title="Graf tlaka za izvještaj" measurements={data.measurements} range={range} targets={data.targets} events={opts.therapy ? data.events : []} series={['systolic', 'diastolic']} height={220} />
+            <TimeChart title="Graf tlaka za izvještaj" measurements={data.measurements} range={range} targets={data.targets} events={opts.therapy ? data.events : []} series={['systolic', 'diastolic']} height={220} categories={data.settings.categories} />
             <h3>Puls</h3>
             <TimeChart title="Graf pulsa za izvještaj" measurements={data.measurements} range={range} targets={data.targets} series={['pulse']} height={140} />
           </div>
@@ -99,7 +99,7 @@ export function ReportPage() {
             <div className="scroll-x"><table className="tbl">
               <thead><tr><th>Datum</th><th>Vrijeme</th><th className="n">SYS</th><th className="n">DIA</th><th className="n">Puls</th><th>Kat.</th><th>Razd.</th><th>Terapija</th><th>Izvor</th>{opts.notes && <th>Simptomi / bilješka</th>}<th>Prosjek</th></tr></thead>
               <tbody>{list.map((m) => (
-                <tr key={m.id}><td className="tabular">{fmtDate(m.measuredAt)}</td><td className="tabular">{fmtTime(m.measuredAt)}</td><td className="n">{m.systolic}</td><td className="n">{m.diastolic}</td><td className="n">{m.pulse}</td><td>{CATEGORY_SHORT[categorize(m.systolic, m.diastolic, data.settings.categories)]}</td>
+                <tr key={m.id}><td className="tabular">{fmtDate(m.measuredAt)}</td><td className="tabular">{fmtTime(m.measuredAt)}</td><td className="n">{m.systolic}</td><td className="n">{m.diastolic}</td><td className="n">{m.pulse ?? '–'}</td><td>{CATEGORY_SHORT[categorize(m.systolic, m.diastolic, data.settings.categories)]}</td>
                   <td>{PERIOD_LABEL[m.period]}</td><td>{m.medicationTiming === 'unknown' ? '–' : TIMING_LABEL[m.medicationTiming]}</td><td>{SOURCE_LABEL[m.source]}</td>
                   {opts.notes && <td>{[...m.symptoms, m.notes].filter(Boolean).join('; ')}</td>}
                   <td>{m.includedInAverage ? 'da' : `isključeno${m.exclusionReason ? ` (${m.exclusionReason})` : ''}`}</td></tr>

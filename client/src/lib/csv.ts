@@ -17,7 +17,7 @@ export function toCsv(ms: Measurement[]): string {
   const rows = [CSV_HEADERS.join(';')];
   for (const m of ms) {
     rows.push([
-      fmtDate(m.measuredAt), fmtTime(m.measuredAt), m.systolic, m.diastolic, m.pulse, m.period, m.medicationTiming, m.source,
+      fmtDate(m.measuredAt), fmtTime(m.measuredAt), m.systolic, m.diastolic, m.pulse ?? '', m.period, m.medicationTiming, m.source,
       m.includedInAverage ? 'da' : 'ne', m.exclusionReason, m.armLocation, m.bodyPosition, m.symptoms.join(', '), m.tags.join(', '), m.notes,
       pulsePressure(m), meanArterialPressure(m).toFixed(1), m.id,
     ].map(esc).join(';'));
@@ -27,7 +27,7 @@ export function toCsv(ms: Measurement[]): string {
 
 export const CSV_TEMPLATE = '﻿datum;vrijeme;sys;dia;puls;razdoblje;biljeska\r\n06.09.2026.;07:30;128;82;66;jutro;primjer retka\r\n';
 
-export interface CsvRow { measuredAt: string; systolic: number; diastolic: number; pulse: number; period: Measurement['period']; notes: string; line: number }
+export interface CsvRow { measuredAt: string; systolic: number; diastolic: number; pulse: number | null; period: Measurement['period']; notes: string; line: number }
 export interface CsvParseResult { rows: CsvRow[]; errors: string[] }
 
 function splitLine(line: string, sep: string): string[] {
@@ -76,8 +76,8 @@ export function parseCsv(text: string): CsvParseResult {
     const time = (c[iTime] || '00:00').trim();
     if (!date || !/^\d{1,2}:\d{2}/.test(time)) { errors.push(`Redak ${n}: neispravan datum ili vrijeme.`); return; }
     const num = (s: string | undefined) => { const v = Number((s || '').trim()); return Number.isInteger(v) && v > 0 ? v : null; };
-    const sys = num(c[iSys]), dia = num(c[iDia]), pulse = num(c[iPulse]);
-    if (sys === null || dia === null || pulse === null) { errors.push(`Redak ${n}: SYS, DIA i puls moraju biti cijeli brojevi.`); return; }
+    const sys = num(c[iSys]), dia = num(c[iDia]), pulse = (c[iPulse] || '').trim() === '' ? null : num(c[iPulse]);
+    if (sys === null || dia === null || (pulse === null && (c[iPulse] || '').trim() !== '')) { errors.push(`Redak ${n}: SYS i DIA moraju biti cijeli brojevi (puls cijeli broj ili prazno).`); return; }
     const p = (c[iPeriod] || '').trim().toLowerCase();
     const period: Measurement['period'] = p.startsWith('jut') || p === 'morning' ? 'morning' : p.startsWith('ve') || p === 'evening' ? 'evening' : 'other';
     rows.push({ measuredAt: fromInputs(date, time.slice(0, 5)).toISOString(), systolic: sys, diastolic: dia, pulse, period, notes: (c[iNotes] || '').trim(), line: n });

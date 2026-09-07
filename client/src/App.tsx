@@ -18,6 +18,7 @@ import { TargetsPage } from './pages/Targets.tsx';
 import { TherapyPage } from './pages/Therapy.tsx';
 import { BackupPage } from './pages/Backup.tsx';
 import { DevicesPage } from './pages/Devices.tsx';
+import { GuidePage } from './pages/Guide.tsx';
 
 function Shell() {
   const { ready } = useStore();
@@ -42,6 +43,7 @@ function Shell() {
         <Route path="/settings/therapy" element={<TherapyPage />} />
         <Route path="/settings/devices" element={<DevicesPage />} />
         <Route path="/settings/backup" element={<BackupPage />} />
+        <Route path="/upute" element={<GuidePage />} />
         <Route path="*" element={<HomePage />} />
       </Routes>
       <Nav />

@@ -3,12 +3,16 @@ import { Link } from 'react-router-dom';
 import { useStore } from '../store.tsx';
 import { fmtRelative } from '../lib/format.ts';
 import { DEFAULT_CATEGORIES, DEFAULT_SAFETY } from '../types.ts';
-import { Field, Modal, useToast } from '../components/ui.tsx';
+import { Confirm, Field, Modal, useToast } from '../components/ui.tsx';
+import { useNavigate } from 'react-router-dom';
 import { clearPin, getLockCfg, setPin } from '../components/Lock.tsx';
 
 export function SettingsPage() {
-  const { data, updateSettings, auth, sync, lastBackupAt } = useStore();
+  const { data, updateSettings, auth, sync, lastBackupAt, factoryReset } = useStore();
   const toast = useToast();
+  const nav = useNavigate();
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetWord, setResetWord] = useState('');
   const s = data.settings;
   const [pinOpen, setPinOpen] = useState(false);
   const [pin, setPinVal] = useState(''); const [pin2, setPin2] = useState(''); const [autoLock, setAutoLock] = useState(5);
@@ -34,6 +38,7 @@ export function SettingsPage() {
         <Link to="/settings/therapy" className="btn block" style={{ justifyContent: 'space-between' }}><span>💊 Terapija i događaji</span><span className="small muted">{data.medications.length} lijekova · {data.events.length} događaja</span></Link>
         <Link to="/settings/devices" className="btn block" style={{ justifyContent: 'space-between' }}><span>🩺 Tlakomjeri</span><span className="small muted">{data.devices.length}</span></Link>
         <Link to="/settings/backup" className="btn block" style={{ justifyContent: 'space-between' }}><span>💾 Sigurnosna kopija, uvoz i izvoz</span><span className="small muted">{lastBackupAt ? fmtRelative(lastBackupAt) : 'nikad'}</span></Link>
+        <Link to="/upute" className="btn block" style={{ justifyContent: 'space-between' }}><span>📖 Upute za ukućane</span><span className="small muted">podijeli link</span></Link>
       </section>
 
       <section className="card">
@@ -92,10 +97,22 @@ export function SettingsPage() {
       </section>
 
       <section className="card">
+        <h2>Tvornički reset ovog uređaja</h2>
+        <p className="small muted">Briše sve lokalne podatke na ovom uređaju: mjerenja, postavke, naučeni OCR, PIN i prijavu. Podaci na računu ostaju i vraćaju se ponovnom prijavom. Ako niste prijavljeni, lokalna mjerenja su nepovratno izgubljena; prije toga izradite sigurnosnu kopiju.</p>
+        <button type="button" className="btn danger" onClick={() => { setResetWord(''); setResetOpen(true); }}>Tvornički reset</button>
+      </section>
+
+      <section className="card">
         <h2>O aplikaciji</h2>
         <p className="small muted">Tlak v1.0 · hrvatski · mmHg, otkucaji/min · datum dd.mm.gggg., 24-satno vrijeme. Aplikacija ne postavlja dijagnozu i ne predlaže promjenu terapije. U hitnom slučaju nazovite 112.</p>
       </section>
 
+      {resetOpen && (
+        <Confirm title="Tvornički reset" confirmLabel="Obriši sve na ovom uređaju" danger onConfirm={() => { if (resetWord.trim().toUpperCase() !== 'RESET') { toast.show('Upišite RESET za potvrdu.'); return; } setResetOpen(false); void factoryReset().then(() => { toast.show('Uređaj je vraćen na početno stanje.'); nav('/'); }); }} onCancel={() => setResetOpen(false)}>
+          <p className="small">{auth ? `Prijavljeni ste kao ${auth.email}; podaci na računu ostaju.` : 'Niste prijavljeni: lokalni podaci bit će trajno izbrisani.'} {data.measurements.length} mjerenja na ovom uređaju.</p>
+          <Field label="Za potvrdu upišite RESET"><input value={resetWord} onChange={(e) => setResetWord(e.target.value)} autoComplete="off" /></Field>
+        </Confirm>
+      )}
       {pinOpen && (
         <Modal title="PIN aplikacije" onClose={() => setPinOpen(false)}>
           <Field label="Novi PIN (4 znamenke)"><input type="password" inputMode="numeric" maxLength={4} value={pin} onChange={(e) => setPinVal(e.target.value.replace(/\D/g, ''))} autoFocus /></Field>

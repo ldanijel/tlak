@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
+import { Confirm, Field, Segmented, useToast } from '../components/ui.tsx';
+import { toInputDate, fromInputs } from '../lib/format.ts';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useStore } from '../store.tsx';
-import { RANGE_LABEL, resolveRange, inRange, type RangeKey } from '../lib/periods.ts';
+import { MAIN_RANGES, RANGE_LABEL, resolveRange, inRange, type RangeKey } from '../lib/periods.ts';
 import { classify } from '../lib/targets.ts';
 import { MeasurementRow } from '../components/MeasurementRow.tsx';
 import { localDayKey, fmtDate } from '../lib/format.ts';
@@ -10,8 +12,10 @@ import { categorize } from '../lib/categories.ts';
 type F = { range: RangeKey; period: string; timing: string; source: string; target: string; note: string; included: string; category: string };
 
 export function HistoryPage() {
-  const { data } = useStore();
+  const { data, removeMany, restoreMany } = useStore();
+  const toast = useToast();
   const [sp] = useSearchParams();
+  const [bulk, setBulk] = useState<null | { mode: 'all' | 'from' | 'to' | 'range'; from: string; to: string }>(null);
   const [f, setF] = useState<F>({ range: (sp.get('range') as RangeKey) || 'all', period: '', timing: '', source: '', target: '', note: '', included: '', category: '' });
   const [limit, setLimit] = useState(100);
   const range = useMemo(() => resolveRange(f.range, new Date(), undefined, data.measurements.length ? new Date(data.measurements[data.measurements.length - 1].measuredAt) : null), [f.range, data.measurements]);
@@ -44,11 +48,38 @@ export function HistoryPage() {
     </select>
   );
 
+  /** Skupno brisanje: SVE, SVE OD:, SVE DO:, RASPON OD–DO (po datumu mjerenja, uključivo). */
+  const bulkTargets = () => {
+    if (!bulk) return [];
+    const from = bulk.mode === 'from' || bulk.mode === 'range' ? fromInputs(bulk.from, '00:00').getTime() : -Infinity;
+    const to = bulk.mode === 'to' || bulk.mode === 'range' ? fromInputs(bulk.to, '23:59').getTime() + 59999 : Infinity;
+    return data.measurements.filter((m) => { const t = new Date(m.measuredAt).getTime(); return t >= from && t <= to; });
+  };
+  const doBulk = async () => {
+    const ids = bulkTargets().map((m) => m.id);
+    setBulk(null);
+    if (!ids.length) { toast.show('Nema mjerenja u odabranom razdoblju.'); return; }
+    await removeMany('measurements', ids);
+    toast.show(`Izbrisano ${ids.length} mjerenja.`, { actionLabel: 'Vrati', onAction: () => { void restoreMany('measurements', ids); }, durationMs: 12000 });
+  };
+
   return (
     <main className="page">
-      <div className="page-header"><h1>Povijest</h1><span className="small muted">{list.length} mjerenja</span></div>
+      <div className="page-header"><h1>Povijest</h1><span className="small muted">{list.length} mjerenja</span>
+        {data.measurements.length > 0 && <button type="button" className="btn small danger" onClick={() => setBulk({ mode: 'range', from: toInputDate(new Date()), to: toInputDate(new Date()) })}>Izbriši više…</button>}
+      </div>
+      {bulk && (
+        <Confirm title="Skupno brisanje mjerenja" confirmLabel={`Izbriši ${bulkTargets().length}`} danger onConfirm={() => void doBulk()} onCancel={() => setBulk(null)}>
+          <Segmented value={bulk.mode} onChange={(mode) => setBulk({ ...bulk, mode })} wrap label="Opseg" options={[{ value: 'all', label: 'SVE' }, { value: 'from', label: 'SVE OD:' }, { value: 'to', label: 'SVE DO:' }, { value: 'range', label: 'RASPON OD–DO' }]} />
+          <div className="grid2">
+            {(bulk.mode === 'from' || bulk.mode === 'range') && <Field label="Od (uključivo)"><input type="date" value={bulk.from} onChange={(e) => setBulk({ ...bulk, from: e.target.value })} /></Field>}
+            {(bulk.mode === 'to' || bulk.mode === 'range') && <Field label="Do (uključivo)"><input type="date" value={bulk.to} onChange={(e) => setBulk({ ...bulk, to: e.target.value })} /></Field>}
+          </div>
+          <p className="small">Bit će izbrisano <strong>{bulkTargets().length}</strong> od {data.measurements.length} mjerenja. Brisanje se može poništiti gumbom „Vrati” odmah nakon brisanja, a briše se i na svim sinkroniziranim uređajima.</p>
+        </Confirm>
+      )}
       <div className="filters no-print" role="group" aria-label="Filtri">
-        {sel('range', (['all', '7d', '28d', '90d', '180d', '1y', 'ytd'] as RangeKey[]).map((r) => [r, r === 'all' ? 'Razdoblje: sve' : RANGE_LABEL[r]]))}
+        {sel('range', (['all', ...MAIN_RANGES] as RangeKey[]).map((r) => [r, r === 'all' ? 'Razdoblje: sve' : RANGE_LABEL[r]]))}
         {sel('period', [['', 'Jutro/večer: sve'], ['morning', 'Jutro'], ['evening', 'Večer'], ['other', 'Drugo']])}
         {sel('timing', [['', 'Terapija: sve'], ['before', 'Prije terapije'], ['after', 'Nakon terapije']])}
         {sel('source', [['', 'Izvor: svi'], ['manual', 'Ručni'], ['photo', 'Fotografija'], ['import', 'Uvoz']])}

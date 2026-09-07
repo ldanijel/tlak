@@ -81,18 +81,23 @@ export function Message({ level, children }: { level: MessageLevel | 'success'; 
   );
 }
 
+/** Vrijednost obojena kategorijom (SYS i DIA zasebno); puls neutralno. Boja nikad nije sama: uz nju je i tekst kategorije drugdje na zaslonu. */
+export function Val({ cls, children }: { cls: string; children: ReactNode }) {
+  return <span className={cls}>{children}</span>;
+}
+
 export function Badge({ kind, children, title }: { kind: string; children: ReactNode; title?: string }) {
   return <span className={`badge ${kind}`} title={title}>{children}</span>;
 }
 
 /* ---------- Segmentirani izbor ---------- */
-export function Segmented<T extends string>({ value, options, onChange, wrap, label }: {
-  value: T; options: { value: T; label: string }[]; onChange: (v: T) => void; wrap?: boolean; label?: string;
+export function Segmented<T extends string>({ value, options, onChange, wrap, short, label }: {
+  value: T; options: { value: T; label: string; title?: string }[]; onChange: (v: T) => void; wrap?: boolean; short?: boolean; label?: string;
 }) {
   return (
-    <div className={`segmented ${wrap ? 'wrap' : ''}`} role="group" aria-label={label}>
+    <div className={`segmented ${wrap ? 'wrap' : ''} ${short ? 'short' : ''}`} role="group" aria-label={label}>
       {options.map((o) => (
-        <button key={o.value} type="button" aria-pressed={value === o.value} onClick={() => onChange(o.value)}>{o.label}</button>
+        <button key={o.value} type="button" aria-pressed={value === o.value} title={o.title} aria-label={o.title} onClick={() => onChange(o.value)}>{o.label}</button>
       ))}
     </div>
   );

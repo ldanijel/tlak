@@ -120,7 +120,7 @@ export function BackupPage() {
             {csv.errors.map((e, i) => <Message key={i} level="warning">{e}</Message>)}
             <p className="small">Za uvoz: <strong>{csv.rows.length}</strong> redaka{csv.dupes > 0 && <>, od toga <strong>{csv.dupes}</strong> mogućih duplikata (isto vrijeme i vrijednosti)</>}.</p>
             <div className="scroll-x"><table className="tbl"><thead><tr><th>Datum</th><th className="n">SYS</th><th className="n">DIA</th><th className="n">Puls</th><th>Razd.</th></tr></thead><tbody>
-              {csv.rows.slice(0, 10).map((r) => <tr key={r.line}><td className="tabular">{fmtDateTime(r.measuredAt)}</td><td className="n">{r.systolic}</td><td className="n">{r.diastolic}</td><td className="n">{r.pulse}</td><td>{r.period}</td></tr>)}
+              {csv.rows.slice(0, 10).map((r) => <tr key={r.line}><td className="tabular">{fmtDateTime(r.measuredAt)}</td><td className="n">{r.systolic}</td><td className="n">{r.diastolic}</td><td className="n">{r.pulse ?? '–'}</td><td>{r.period}</td></tr>)}
               {csv.rows.length > 10 && <tr><td colSpan={5} className="tiny">… i još {csv.rows.length - 10}</td></tr>}
             </tbody></table></div>
             <div className="row" style={{ marginTop: 8 }}>

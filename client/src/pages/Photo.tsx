@@ -148,7 +148,7 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
     if (hasErrors(m)) return;
     if (needsConfirm(m) && !confirmed) { setConfirmed(true); return; }
     const saved = await save('measurements', {
-      measuredAt, timezone: currentTimezone(), systolic: sys!, diastolic: dia!, pulse: pulse!,
+      measuredAt, timezone: currentTimezone(), systolic: sys!, diastolic: dia!, pulse,
       source: mode, period: suggestPeriod(new Date(measuredAt)), sessionId: findSession(measuredAt, data.measurements, data.settings.sessionWindowMinutes),
       armLocation: 'unknown', bodyPosition: 'unknown', medicationTiming: 'unknown', deviceId: deviceId || null,
       symptoms: [], tags: [], notes: '', includedInAverage: true, exclusionReason: '',
@@ -159,9 +159,10 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
     if (deviceId && result && source) {
       try {
       let md = { ...modelData, samples: { ...modelData.samples }, variantWins: { ...modelData.variantWins } };
-      const confirmedValues = [String(sys), String(dia), String(pulse)];
+      const confirmedValues = [String(sys), String(dia), pulse === null ? '' : String(pulse)];
       const ocrValues = [result.systolic.value, result.diastolic.value, result.pulse.value];
       confirmedValues.forEach((v, i) => {
+        if (!v) return; // puls nije unesen: bez učenja za tu zonu
         md = learn(md, result.glyphs[i] || [], v, result.bandDims[i], i);
         const win = result.variantWinner[i];
         if (win && ocrValues[i] === Number(v)) md.variantWins[win] = (md.variantWins[win] || 0) + 1;
@@ -177,7 +178,7 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
     }
     // Fotografija se ne čuva: izvor je uklonjen iz radne memorije.
     setSource(null); setResult(null);
-    toast.show(`Mjerenje ${saved.systolic}/${saved.diastolic}, puls ${saved.pulse} spremljeno.`, { actionLabel: 'Poništi', onAction: () => { void remove('measurements', saved.id); } });
+    toast.show(`Mjerenje ${saved.systolic}/${saved.diastolic}${saved.pulse !== null ? `, puls ${saved.pulse}` : ''} spremljeno.`, { actionLabel: 'Poništi', onAction: () => { void remove('measurements', saved.id); } });
     if (next) {
       // serija: odmah nova fotografija, s istim tlakomjerom i zapamćenim okvirom
       setSys(null); setDia(null); setPulse(null); setMsgs([]); setConfirmed(false);

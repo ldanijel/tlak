@@ -31,14 +31,14 @@ export function validateDraft(
 ): ValidationMessage[] {
   const out: ValidationMessage[] = [];
   const isInt = (v: number | null) => v !== null && Number.isInteger(v);
-  if (!isInt(d.systolic) || !isInt(d.diastolic) || !isInt(d.pulse)) {
-    out.push({ level: 'error', code: 'missing', text: 'Unesite sve tri vrijednosti (SYS, DIA, puls) kao cijele brojeve.' });
+  if (!isInt(d.systolic) || !isInt(d.diastolic)) {
+    out.push({ level: 'error', code: 'missing', text: 'Unesite SYS i DIA kao cijele brojeve. Puls je neobvezan.' });
     return out;
   }
-  const sys = d.systolic!, dia = d.diastolic!, pulse = d.pulse!;
+  const sys = d.systolic!, dia = d.diastolic!, pulse = d.pulse; // puls može biti prazan
 
   const range = (v: number, [lo, hi]: readonly [number, number]) => v >= lo && v <= hi;
-  if (!range(sys, TECHNICAL_RANGE.systolic) || !range(dia, TECHNICAL_RANGE.diastolic) || !range(pulse, TECHNICAL_RANGE.pulse)) {
+  if (!range(sys, TECHNICAL_RANGE.systolic) || !range(dia, TECHNICAL_RANGE.diastolic) || (pulse !== null && !range(pulse, TECHNICAL_RANGE.pulse))) {
     out.push({
       level: 'check', code: 'out_of_technical_range', requiresConfirm: true,
       text: `Vrijednost je izvan tehnički očekivanog raspona (SYS ${TECHNICAL_RANGE.systolic.join('–')}, DIA ${TECHNICAL_RANGE.diastolic.join('–')}, puls ${TECHNICAL_RANGE.pulse.join('–')}). Potvrdite da je podatak točan.`,
@@ -69,7 +69,7 @@ export function validateDraft(
   } else if (sys <= s.sysLow || dia <= s.diaLow) {
     out.push({ level: 'warning', code: 'low', text: `Niska vrijednost (≤ ${s.sysLow}/${s.diaLow}). Ako imate vrtoglavicu ili slabost, ponovite mjerenje i obratite se liječniku.` });
   }
-  if (pulse >= s.pulseHigh || pulse <= s.pulseLow) {
+  if (pulse !== null && (pulse >= s.pulseHigh || pulse <= s.pulseLow)) {
     out.push({ level: 'warning', code: 'pulse_unusual', text: `Puls je neuobičajen (${pulse}/min). Ponovite mjerenje u mirovanju.` });
   }
   if (!out.some((m) => m.level === 'error')) {

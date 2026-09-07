@@ -5,7 +5,7 @@ import { PERIOD_LABEL, SOURCE_LABEL, TIMING_LABEL } from '../lib/labels.ts';
 import { classify, STATUS_LABEL } from '../lib/targets.ts';
 import { Badge } from './ui.tsx';
 import type { CategoryThresholds, SafetyThresholds } from '../types.ts';
-import { categorize, CATEGORY_ICON, CATEGORY_SHORT } from '../lib/categories.ts';
+import { categorize, categorizeValue, CATEGORY_ICON, CATEGORY_SHORT } from '../lib/categories.ts';
 
 const STATUS_ICON = { in: '✓', above: '↑', below: '↓', none: '' };
 
@@ -16,7 +16,7 @@ export function MeasurementRow({ m, targets, categories }: { m: Measurement; tar
     <Link to={`/measurement/${m.id}`} className={`mrow ${m.includedInAverage ? '' : 'excluded'}`}>
       <div className="when tabular">{fmtDate(m.measuredAt)}<br />{fmtTime(m.measuredAt)}</div>
       <div>
-        <div className="vals tabular">{m.systolic}/{m.diastolic}<span className="p">♥ {m.pulse}</span></div>
+        <div className="vals tabular"><span className={`val-${categorizeValue('sys', m.systolic, categories)}`}>{m.systolic}</span>/<span className={`val-${categorizeValue('dia', m.diastolic, categories)}`}>{m.diastolic}</span><span className="p val-neutral">♥ {m.pulse ?? '–'}</span></div>
         <div className="meta">
           <span>{PERIOD_LABEL[m.period]}</span>
           {m.medicationTiming !== 'unknown' && <span>· {TIMING_LABEL[m.medicationTiming]}</span>}

@@ -2,19 +2,19 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../store.tsx';
 import { fmtDateTime, fmtNum, fmtDelta, fmtRelative, toInputDate } from '../lib/format.ts';
-import { RANGE_LABEL, resolveRange, type RangeKey } from '../lib/periods.ts';
+import { MAIN_RANGES, RANGE_LABEL, RANGE_SHORT, resolveRange, type RangeKey } from '../lib/periods.ts';
 import { summarize } from '../lib/stats.ts';
 import { classify, STATUS_LABEL } from '../lib/targets.ts';
 import { PERIOD_LABEL, SOURCE_LABEL } from '../lib/labels.ts';
 import { Badge, Segmented, useLocalStorage } from '../components/ui.tsx';
 import { CategoryBar, MinAvgMaxBar } from '../components/charts.tsx';
-import { categorize, CATEGORY_ICON, CATEGORY_LABEL, categoryRangeText } from '../lib/categories.ts';
+import { categorize, categorizeValue, CATEGORY_ICON, CATEGORY_LABEL, categoryRangeText } from '../lib/categories.ts';
 
-const RANGES: RangeKey[] = ['7d', '28d', '90d', 'ytd', 'custom'];
+const RANGES: RangeKey[] = [...MAIN_RANGES, 'custom'];
 
 export function HomePage() {
   const { data, sync, auth, lastBackupAt } = useStore();
-  const [rangeKey, setRangeKey] = useLocalStorage<RangeKey>('tlak.home.range', '7d');
+  const [rangeKey, setRangeKey] = useLocalStorage<RangeKey>('tlak.home.range2', 'week');
   const [custom, setCustom] = useState({ from: toInputDate(new Date(Date.now() - 13 * 86400e3)), to: toInputDate(new Date()) });
   const range = useMemo(() => resolveRange(rangeKey, new Date(), { from: new Date(custom.from), to: new Date(custom.to) }), [rangeKey, custom]);
   const s = useMemo(() => summarize(data.measurements, range, data.targets, true, data.settings.categories), [data.measurements, range, data.targets, data.settings.categories]);
@@ -33,9 +33,9 @@ export function HomePage() {
         {last ? (
           <Link to={`/measurement/${last.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
             <div className="reading">
-              <div className="sys"><div className="l">SYS</div><div className="v">{last.systolic}</div><div className="u">mmHg</div></div>
-              <div className="dia"><div className="l">DIA</div><div className="v">{last.diastolic}</div><div className="u">mmHg</div></div>
-              <div className="pulse"><div className="l">Puls</div><div className="v">{last.pulse}</div><div className="u">otk./min</div></div>
+              <div className="sys"><div className="l">SYS</div><div className={`v val-${categorizeValue('sys', last.systolic, data.settings.categories)}`}>{last.systolic}</div><div className="u">mmHg</div></div>
+              <div className="dia"><div className="l">DIA</div><div className={`v val-${categorizeValue('dia', last.diastolic, data.settings.categories)}`}>{last.diastolic}</div><div className="u">mmHg</div></div>
+              <div className="pulse"><div className="l">Puls</div><div className="v val-neutral">{last.pulse ?? '–'}</div><div className="u">otk./min</div></div>
             </div>
             <div className="row" style={{ marginTop: 10, justifyContent: 'center' }}>
               <span className="small muted tabular">{fmtDateTime(last.measuredAt)} · {PERIOD_LABEL[last.period]} · {SOURCE_LABEL[last.source]}</span>
@@ -55,14 +55,14 @@ export function HomePage() {
           <Link to="/new" className="btn primary">✏️ Unesi ručno</Link>
           <Link to="/new/photo" className="btn">📷 Fotografiraj tlakomjer</Link>
           <Link to="/new/gallery" className="btn">🖼 Odaberi fotografiju</Link>
-          <Link to="/history?range=7d" className="btn">📅 Posljednjih 7 dana</Link>
+          <Link to="/history?range=week" className="btn">📅 Posljednjih 7 dana</Link>
           <Link to="/report" className="btn" style={{ gridColumn: '1 / -1' }}>📄 Izradi izvještaj za liječnika</Link>
         </div>
       </section>
 
       <section className="card" aria-labelledby="sum">
         <h2 id="sum">Sažetak razdoblja</h2>
-        <Segmented value={rangeKey} onChange={setRangeKey} wrap label="Razdoblje" options={RANGES.map((r) => ({ value: r, label: RANGE_LABEL[r] }))} />
+        <Segmented value={rangeKey} onChange={setRangeKey} short label="Razdoblje" options={RANGES.map((r) => ({ value: r, label: RANGE_SHORT[r], title: RANGE_LABEL[r] }))} />
         {rangeKey === 'custom' && (
           <div className="grid2">
             <div className="field"><label>Od<input type="date" value={custom.from} onChange={(e) => setCustom({ ...custom, from: e.target.value })} /></label></div>

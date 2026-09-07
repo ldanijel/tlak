@@ -16,6 +16,12 @@ export function categorize(systolic: number, diastolic: number, t: CategoryThres
   return rank[sys] >= rank[dia] ? sys : dia;
 }
 
+/** Kategorija samo jedne komponente (SYS ili DIA) – za bojanje vrijednosti pri prikazu. */
+export function categorizeValue(kind: 'sys' | 'dia', v: number, t: CategoryThresholds): BpCategory {
+  const [e, h, vh] = kind === 'sys' ? [t.elevatedSys, t.highSys, t.veryHighSys] : [t.elevatedDia, t.highDia, t.veryHighDia];
+  return v >= vh ? 'veryhigh' : v >= h ? 'high' : v >= e ? 'elevated' : 'normal';
+}
+
 export function categoryRangeText(c: BpCategory, t: CategoryThresholds): string {
   switch (c) {
     case 'normal': return `SYS < ${t.elevatedSys} i DIA < ${t.elevatedDia}`;

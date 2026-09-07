@@ -68,6 +68,8 @@ test('validacija: nedostaje, SYS<=DIA, raspon, duplikat, sigurnosna poruka, cilj
   const base = { measuredAt: '2026-09-01T06:00:00.000Z', period: 'morning' as const };
   const opts = { existing: [m({ measuredAt: '2026-09-01T06:00:00.000Z', systolic: 120, diastolic: 80, pulse: 70 })], targets: [target], safety: DEFAULT_SAFETY, categories: DEFAULT_CATEGORIES };
   assert.ok(hasErrors(validateDraft({ ...base, systolic: 120, diastolic: null, pulse: 70 }, opts)));
+  // puls je neobvezan
+  assert.ok(!hasErrors(validateDraft({ ...base, measuredAt: '2026-09-01T12:00:00.000Z', systolic: 120, diastolic: 80, pulse: null }, opts)));
   const swapped = validateDraft({ ...base, systolic: 80, diastolic: 120, pulse: 70 }, opts);
   assert.ok(swapped.some((x) => x.suggestSwap));
   const hi = validateDraft({ ...base, measuredAt: '2026-09-01T09:00:00.000Z', systolic: 185, diastolic: 95, pulse: 70 }, opts);
@@ -91,14 +93,16 @@ test('ciljevi: vrijedi cilj na snazi na datum mjerenja', () => {
 
 test('CSV: izvoz pa uvoz daje iste prosjeke kao graf', () => {
   const list = [
+    m({ measuredAt: new Date(2026, 8, 2, 7, 0).toISOString(), systolic: 130, diastolic: 85, pulse: null }),
     m({ measuredAt: new Date(2026, 8, 1, 7, 0).toISOString(), systolic: 121, diastolic: 81, pulse: 61 }),
     m({ measuredAt: new Date(2026, 8, 1, 21, 0).toISOString(), systolic: 139, diastolic: 89, pulse: 79, period: 'evening', notes: 'bilješka; sa "navodnicima"' }),
   ];
   const csv = toCsv(list);
   const parsed = parseCsv(csv);
   assert.equal(parsed.errors.length, 0);
-  assert.equal(parsed.rows.length, 2);
-  assert.equal(parsed.rows[1].notes, 'bilješka; sa "navodnicima"');
+  assert.equal(parsed.rows.length, 3);
+  assert.equal(parsed.rows[0].pulse, null);
+  assert.equal(parsed.rows[2].notes, 'bilješka; sa "navodnicima"');
   const daily = dailyAverages(list);
   const avgCsv = parsed.rows.reduce((a, r) => a + r.systolic, 0) / parsed.rows.length;
   assert.equal(daily[0].sys, avgCsv);
@@ -125,8 +129,10 @@ test('OCR parsiranje: gornji → SYS, srednji → DIA, donji → puls; sitni bro
 
 test('razdoblja: 7 dana, prethodno razdoblje, prijedlog jutro/večer', () => {
   const now = new Date(2026, 8, 6, 12);
-  const r = resolveRange('7d', now);
+  const r = resolveRange('week', now);
   assert.equal(r.from.getDate(), 31);
+  assert.equal(resolveRange('day', now).from.getDate(), 6);
+  assert.equal(resolveRange('month', now).from.getMonth(), 7);
   const p = previousRange(r);
   assert.ok(p.to < r.from);
   assert.equal(suggestPeriod(new Date(2026, 8, 6, 7)), 'morning');

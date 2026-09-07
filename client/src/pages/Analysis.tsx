@@ -2,16 +2,16 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../store.tsx';
 import { fmtNum, fmtDelta, toInputDate } from '../lib/format.ts';
-import { RANGE_LABEL, resolveRange, type RangeKey } from '../lib/periods.ts';
+import { MAIN_RANGES, RANGE_LABEL, RANGE_SHORT, resolveRange, type RangeKey } from '../lib/periods.ts';
 import { summarize, groupSessions, analyzed } from '../lib/stats.ts';
 import { Badge, Segmented, useLocalStorage } from '../components/ui.tsx';
 import { CategoryBar, TimeChart } from '../components/charts.tsx';
 
-const RANGES: RangeKey[] = ['7d', '28d', '90d', '180d', '1y', 'all', 'custom'];
+const RANGES: RangeKey[] = [...MAIN_RANGES, 'all', 'custom'];
 
 export function AnalysisPage() {
   const { data, updateSettings } = useStore();
-  const [rangeKey, setRangeKey] = useLocalStorage<RangeKey>('tlak.analysis.range', '28d');
+  const [rangeKey, setRangeKey] = useLocalStorage<RangeKey>('tlak.analysis.range2', 'month');
   const [custom, setCustom] = useState({ from: toInputDate(new Date(Date.now() - 27 * 86400e3)), to: toInputDate(new Date()) });
   const earliest = data.measurements.length ? new Date(data.measurements[data.measurements.length - 1].measuredAt) : null;
   const range = useMemo(() => resolveRange(rangeKey, new Date(), { from: new Date(custom.from), to: new Date(custom.to) }, earliest), [rangeKey, custom, earliest]);
@@ -22,7 +22,7 @@ export function AnalysisPage() {
   return (
     <main className="page">
       <div className="page-header"><h1>Analiza</h1><Link to="/report" className="btn small">📄 Izvještaj</Link></div>
-      <Segmented value={rangeKey} onChange={setRangeKey} wrap label="Razdoblje" options={RANGES.map((r) => ({ value: r, label: RANGE_LABEL[r] }))} />
+      <Segmented value={rangeKey} onChange={setRangeKey} short label="Razdoblje" options={RANGES.map((r) => ({ value: r, label: RANGE_SHORT[r], title: RANGE_LABEL[r] }))} />
       {rangeKey === 'custom' && (
         <div className="grid2">
           <div className="field"><label>Od<input type="date" value={custom.from} onChange={(e) => setCustom({ ...custom, from: e.target.value })} /></label></div>
@@ -32,7 +32,7 @@ export function AnalysisPage() {
 
       <section className="card">
         <h2>Krvni tlak (SYS/DIA)</h2>
-        <TimeChart title="Graf sistoličkog i dijastoličkog tlaka" measurements={data.measurements} range={range} targets={data.targets} events={data.events} series={['systolic', 'diastolic']} showMovingAverage={data.settings.movingAverage} />
+        <TimeChart title="Graf sistoličkog i dijastoličkog tlaka" measurements={data.measurements} range={range} targets={data.targets} events={data.events} series={['systolic', 'diastolic']} showMovingAverage={data.settings.movingAverage} categories={data.settings.categories} />
         <label className="row small" style={{ marginTop: 8 }}><input type="checkbox" checked={data.settings.movingAverage} onChange={(e) => void updateSettings({ movingAverage: e.target.checked })} /> Prikaži 7-dnevni pomični prosjek (izračun)</label>
       </section>
       <section className="card">
