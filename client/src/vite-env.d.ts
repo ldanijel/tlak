@@ -1,0 +1,4 @@
+/// <reference types="vite/client" />
+declare const __APP_VERSION__: string;
+declare const __BUILD_TIME__: string;
+interface Window { __tlakCheckUpdate?: () => Promise<boolean>; __tlakUpdateNow?: () => Promise<void> }

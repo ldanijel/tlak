@@ -1,10 +1,11 @@
 import express from 'express';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { COLLECTIONS } from './db.js';
 import { hashPassword, verifyPassword, createSession, requireAuth, rateLimiter } from './auth.js';
 
+const SERVER_VERSION = (() => { try { return JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version; } catch { return 'unknown'; } })();
 const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
 const MAX_RECORD_BYTES = 64 * 1024;
 const PULL_LIMIT = 500;
@@ -68,7 +69,7 @@ export function createApp(db, options = {}) {
   const validCredentials = (email, password) =>
     EMAIL_RE.test(email) && typeof password === 'string' && password.length >= 8 && password.length <= 200;
 
-  app.get('/api/health', (req, res) => res.json({ ok: true, registration: allowRegistration, inviteRequired: !!inviteCode }));
+  app.get('/api/health', (req, res) => res.json({ ok: true, version: SERVER_VERSION, registration: allowRegistration, inviteRequired: !!inviteCode }));
 
   app.post('/api/auth/register', async (req, res) => {
     if (!allowRegistration) return res.status(403).json({ error: 'registration_disabled' });

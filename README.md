@@ -139,6 +139,9 @@ createdAt, updatedAt) i ostaje mapljiv na HealthKit/Health Connect.
   nepouzdanog izreza uče se samo zone koje je OCR pogodio, raspored se ne pamti, a korisnik dobiva poruku da se iz te fotografije
   nije učilo. Time pogrešan automatski izrez ne kvari naučeni model.
 - EXIF datum fotografije koristi se i kad je zaslon pronađen automatski (prije samo pri ručnom izrezu).
+- Postavke → O aplikaciji prikazuje stvarnu verziju iz `package.json` (`__APP_VERSION__`), vrijeme izgradnje i verziju
+  poslužitelja (`/api/health` vraća `version`), uz gumb „Provjeri ažuriranje”. Nova verzija se i dalje preuzima sama
+  (autoUpdate), a provjera se ponavlja svakih sat vremena i pri svakom povratku u aplikaciju.
 - Dijagnostika OCR-a (verzija 2) uključuje umanjenu cijelu fotografiju, podrijetlo izreza, međurezultate automatskog
   pronalaženja i potpune bitmape naučenih znamenki.
 

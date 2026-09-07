@@ -7,6 +7,7 @@ import { Confirm, Field, Modal, useToast } from '../components/ui.tsx';
 import { useNavigate } from 'react-router-dom';
 import { syncNow } from '../sync/sync.ts';
 import { clearPin, getLockCfg, setPin } from '../components/Lock.tsx';
+import { api } from '../sync/api.ts';
 
 export function SettingsPage() {
   const { data, updateSettings, auth, sync, lastBackupAt, factoryReset } = useStore();
@@ -14,6 +15,19 @@ export function SettingsPage() {
   const nav = useNavigate();
   const [resetOpen, setResetOpen] = useState(false);
   const [resetWord, setResetWord] = useState('');
+  const [upd, setUpd] = useState<'idle' | 'checking' | 'none' | 'found'>('idle');
+  const [serverVersion, setServerVersion] = useState<string | null>(null);
+  const checkUpdate = async () => {
+    setUpd('checking');
+    try {
+      const h = await api<{ version?: string }>('GET', '/api/health').catch(() => null);
+      if (h?.version) setServerVersion(h.version);
+      const found = window.__tlakCheckUpdate ? await Promise.race([window.__tlakCheckUpdate(), new Promise<boolean>((r) => setTimeout(() => r(false), 8000))]) : false;
+      const newer = !!h?.version && h.version !== __APP_VERSION__;
+      if (found || newer) { setUpd('found'); toast.show('Nova verzija je preuzeta, aplikacija se osvježava…'); setTimeout(() => { if (window.__tlakUpdateNow) void window.__tlakUpdateNow(); else location.reload(); }, 800); }
+      else setUpd('none');
+    } catch { setUpd('none'); }
+  };
   const s = data.settings;
   const [pinOpen, setPinOpen] = useState(false);
   const [pin, setPinVal] = useState(''); const [pin2, setPin2] = useState(''); const [autoLock, setAutoLock] = useState(5);
@@ -105,7 +119,9 @@ export function SettingsPage() {
 
       <section className="card">
         <h2>O aplikaciji</h2>
-        <p className="small muted">Tlak v1.0 · hrvatski · mmHg, otkucaji/min · datum dd.mm.gggg., 24-satno vrijeme. Aplikacija ne postavlja dijagnozu i ne predlaže promjenu terapije. U hitnom slučaju nazovite 112.</p>
+        <p className="small"><strong>Tlak v{__APP_VERSION__}</strong> · izgrađeno {new Date(__BUILD_TIME__).toLocaleString('hr-HR', { dateStyle: 'short', timeStyle: 'short' })}{serverVersion && ` · poslužitelj v${serverVersion}`}</p>
+        <div className="row"><button type="button" className="btn small" disabled={upd === 'checking'} onClick={() => void checkUpdate()}>{upd === 'checking' ? 'Provjera…' : 'Provjeri ažuriranje'}</button>{upd === 'none' && <span className="tiny">Imate najnoviju verziju.</span>}{upd === 'found' && <span className="tiny">Nova verzija, osvježavanje…</span>}</div>
+        <p className="small muted">Nova verzija preuzima se sama u pozadini i primjenjuje pri idućem otvaranju aplikacije; provjera se ponavlja svakih sat vremena. Hrvatski · mmHg, otkucaji/min · datum dd.mm.gggg., 24-satno vrijeme. Aplikacija ne postavlja dijagnozu i ne predlaže promjenu terapije. U hitnom slučaju nazovite 112.</p>
       </section>
 
       {resetOpen && (
