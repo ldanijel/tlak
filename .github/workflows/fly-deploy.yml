@@ -28,12 +28,15 @@ jobs:
       REGION: ${{ inputs.region || 'fra' }}
       ALLOW_REG: ${{ vars.FLY_ALLOW_REGISTRATION }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - name: Provjera postavki
         run: |
           [ -n "$FLY_API_TOKEN" ] || { echo "::error::Nedostaje tajna FLY_API_TOKEN (Settings → Secrets → Actions)."; exit 1; }
           [ -n "$APP" ] || { echo "::error::Nedostaje naziv aplikacije (unos app_name ili varijabla FLY_APP_NAME)."; exit 1; }
+          # Fly.io dopušta samo mala slova, brojke i crtice: pretvaramo u mala slova i uklanjamo ostalo.
+          APP=$(echo "$APP" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-\n' '-' | sed 's/^-*//; s/-*$//')
+          echo "APP=$APP" >> "$GITHUB_ENV"
           echo "Aplikacija: $APP, regija: $REGION"
       - name: Upiši naziv i regiju u fly.toml
         run: |
