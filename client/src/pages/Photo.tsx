@@ -29,6 +29,9 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
   const model: OcrModel | undefined = data.ocrModels.find((x) => x.deviceId === deviceId);
   const modelData: OcrModelData = model ? { samples: model.samples, variantWins: model.variantWins, photos: model.photos, layout: model.layout, positions: model.positions || {} } : emptyModel();
   const [layoutApplied, setLayoutApplied] = useState(false);
+  // Opcija: nakon spremanja odmah nova fotografija (serija mjerenja). Pamti se na ovom uređaju.
+  const [series, setSeries] = useState<boolean>(() => { try { return localStorage.getItem('tlak.photoSeries') === '1'; } catch { return false; } });
+  const toggleSeries = (v: boolean) => { setSeries(v); try { localStorage.setItem('tlak.photoSeries', v ? '1' : '0'); } catch { /* ignore */ } };
 
   const applyLayout = (c: HTMLCanvasElement, m: OcrModel | undefined) => {
     if (m?.layout) {
@@ -104,7 +107,7 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
   };
 
   const measuredAt = fromInputs(date, time).toISOString();
-  const onSave = async () => {
+  const onSave = async (next = series) => {
     const m = validateDraft({ systolic: sys, diastolic: dia, pulse, measuredAt, period: suggestPeriod(new Date(measuredAt)) }, { existing: data.measurements, targets: data.targets, safety: data.settings.safety, categories: data.settings.categories });
     setMsgs(m);
     if (hasErrors(m)) return;
@@ -134,6 +137,12 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
     // Fotografija se ne čuva: izvor je uklonjen iz radne memorije.
     setSource(null); setResult(null);
     toast.show(`Mjerenje ${saved.systolic}/${saved.diastolic}, puls ${saved.pulse} spremljeno.`, { actionLabel: 'Poništi', onAction: () => { void remove('measurements', saved.id); } });
+    if (next) {
+      // serija: odmah nova fotografija, s istim tlakomjerom i zapamćenim okvirom
+      setSys(null); setDia(null); setPulse(null); setMsgs([]); setConfirmed(false);
+      setStage('pick');
+      return;
+    }
     nav('/', { replace: true });
   };
 
@@ -279,8 +288,10 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
           </p>
           <p className="tiny">Model: {result.engine}. Ništa se ne sprema bez vaše potvrde.{deviceId ? ` Potvrdom aplikacija uči znamenke ovog tlakomjera (${sampleCount(modelData)} naučenih znamenki${modelReady(modelData) ? ', aktivno' : ', još se uči'}).` : ' Odaberite tlakomjer da bi aplikacija učila njegove znamenke.'}</p>
           {msgs.map((m, i) => <Message key={i} level={m.level}>{m.text}{m.suggestSwap && <div><button type="button" className="btn small" onClick={() => { const s = sys; setSys(dia); setDia(s); setMsgs([]); }}>Zamijeni SYS i DIA</button></div>}</Message>)}
+          <label className="row small" style={{ marginTop: 6 }}><input type="checkbox" checked={series} onChange={(e) => toggleSeries(e.target.checked)} /> Nakon spremanja odmah fotografiraj sljedeće (serija mjerenja)</label>
           <div className="stack" style={{ marginTop: 8 }}>
-            <button type="submit" className="btn primary big">{confirmed && needsConfirm(msgs) ? 'Potvrdi i spremi' : 'Potvrdi i spremi'}</button>
+            <button type="submit" className="btn primary big">{series ? 'Potvrdi, spremi i fotografiraj sljedeće' : 'Potvrdi i spremi'}</button>
+            {series && <button type="button" className="btn" onClick={() => void onSave(false)}>Potvrdi i spremi (završi seriju)</button>}
             <button type="button" className="btn" onClick={() => setStage('crop')}>Ispravi izrez / ponovno prepoznaj</button>
             <button type="button" className="btn" onClick={() => { setSource(null); setResult(null); setStage('pick'); }}>{mode === 'camera' ? 'Ponovno fotografiraj' : 'Druga fotografija'}</button>
             <Link to="/" className="btn ghost">Odustani</Link>
