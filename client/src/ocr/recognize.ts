@@ -212,6 +212,7 @@ export async function recognizeBands(displayIn: HTMLCanvasElement, dividersIn: [
   const glyphsPerBand: Glyph[][] = [];
   const bandDims: BandDims[] = [];
   const alignmentWarnings: string[] = [];
+  const warnings: string[] = [];
   const variantWinner: (string | null)[] = [];
   const learned: boolean[] = [];
   let engineUsed = '';
@@ -253,6 +254,9 @@ export async function recognizeBands(displayIn: HTMLCanvasElement, dividersIn: [
       variants.push(c);
     }
     const seg = decodeBandSevenSegment(glyphs, ranges[i]);
+    // znamenke koje dodiruju gornji ili donji rub zone vjerojatno su odrezane horizontalom: očitanje nije pouzdano
+    const keptForCut = rightmostDigits(glyphs, 3);
+    const cut = keptForCut.length >= 2 && keptForCut.filter((g) => g.y0 <= 1 || g.y1 >= bin.height - 2).length * 2 >= keptForCut.length;
     bandDims.push({ w: bin.width, h: bin.height });
     const align = checkAlignment(model, i, glyphs, { w: bin.width, h: bin.height });
     if (align) alignmentWarnings.push(align);
@@ -270,6 +274,10 @@ export async function recognizeBands(displayIn: HTMLCanvasElement, dividersIn: [
     }
     // Tesseractov pogodak s vrlo niskom pouzdanošću (< 25 %) ne popunjava polje: bolje prazno nego krivo
     if (best.value !== null && best.confidence < 25) best = { value: null, confidence: best.confidence, reason: `niska pouzdanost (OCR ${best.value})` };
+    if (cut && best.value !== null && best.confidence < 70) {
+      warnings.push(`Zona ${names[i]}: znamenke su odrezane rubom zone; pomaknite horizontalu ili okvir.`);
+      best = { value: null, confidence: best.confidence, reason: `odrezano (OCR ${best.value})` };
+    }
     // dekoder segmenata (bez učenja): siguran je kad su segmenti jasno uključeni/isključeni
     if (seg.value !== null) {
       if (best.value === seg.value) best = { value: seg.value, confidence: Math.max(best.confidence, seg.confidence, 85) };
@@ -297,7 +305,6 @@ export async function recognizeBands(displayIn: HTMLCanvasElement, dividersIn: [
     learned.push(used);
   }
   const [systolic, diastolic, pulse] = guesses;
-  const warnings: string[] = [];
   if (systolic.value !== null && diastolic.value !== null && systolic.value <= diastolic.value) {
     warnings.push('Prepoznati SYS nije veći od DIA – provjerite vrijednosti i položaj horizontala.');
     systolic.confidence = Math.min(systolic.confidence, 50); diastolic.confidence = Math.min(diastolic.confidence, 50);

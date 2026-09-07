@@ -153,6 +153,11 @@ createdAt, updatedAt) i ostaje mapljiv na HealthKit/Health Connect.
   ostaje ikona); redovi pročitani na različitim binarizacijama spajaju se po znamenkama (jedna nađe lijevu „1”, druga
   srednju). Kad ništa nije pročitano, a okvir zaslona postoji, on je početni okvir za ručni izrez umjesto zadanog
   okvira na sredini fotografije.
+- Auto-detekcija, treći krug (dijagnostika 134/86/87): unutrašnjost okvira zaslona obrađuje se i produženo prema dolje
+  za 30 % visine okvira (donji rub LCD-a često je zasebna komponenta, pa okvir ne obuhvaća red pulsa); bez reda pulsa
+  okvir ide 1,5 visine DIA-e ispod DIA-e; debela „8” ima udio tinte do ~0,8, pa se ćelija odbacuje kao puna mrlja tek
+  iznad 0,85. Glavni cjevovod: znamenke koje dodiruju gornji ili donji rub zone smatraju se odrezanima i ne popunjavaju
+  polje ispod 70 % pouzdanosti (prije je odrezana „87” pročitana kao „97”).
 - Inverzija polariteta samo kad je uz nisku srednju svjetlinu i svijetli rep histograma jači od tamnog: tamni LCD u
   sjeni (BM38, zona pulsa) s još tamnijim znamenkama više se ne invertira (prije je to zonu pulsa pretvaralo u mrlje).
 - Nakon rezanja svijetlog ruba (`trimDisplay`) horizontale se preračunaju na novu visinu.

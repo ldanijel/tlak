@@ -90,19 +90,29 @@ export function autoDetect(gray: Uint8ClampedArray, w: number, h: number, debug?
   const uniq = frames.filter((f) => { const dup = seen.some((s) => Math.abs(s.x0 - f.x0) < sw * 0.03 && Math.abs(s.y0 - f.y0) < sh * 0.03 && Math.abs(s.x1 - f.x1) < sw * 0.03 && Math.abs(s.y1 - f.y1) < sh * 0.03); if (!dup) seen.push(f); return !dup; })
     .sort((a, b) => (b.x1 - b.x0) * (b.y1 - b.y0) - (a.x1 - a.x0) * (a.y1 - a.y0)).slice(0, 3);
   for (const f of uniq) {
+    // Okvir komponente ne mora obuhvatiti cijeli zaslon (donji rub LCD-a često je zasebna komponenta,
+    // a red pulsa je ispod DIA-e), pa se unutrašnjost proširuje prema dolje za 30 % visine okvira.
     const inset = Math.round(Math.min(f.x1 - f.x0, f.y1 - f.y0) * 0.03) + 2;
-    const cx0 = f.x0 + inset, cy0 = f.y0 + inset, cx1 = f.x1 - inset, cy1 = f.y1 - inset;
-    const cw = cx1 - cx0 + 1, ch = cy1 - cy0 + 1;
-    if (cw < sw * 0.1 || ch < sh * 0.1) continue;
-    const crop = new Uint8ClampedArray(cw * ch);
-    for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) crop[y * cw + x] = g[(cy0 + y) * sw + cx0 + x];
+    const cx0 = f.x0 + inset, cy0 = f.y0 + inset, cx1 = f.x1 - inset;
+    const cw = cx1 - cx0 + 1;
+    if (cw < sw * 0.1) continue;
+    // Prvo unutrašnjost okvira; ako nema tri reda, još i produženo prema dolje za 30 % visine okvira
+    // (donji rub LCD-a često je zasebna komponenta, pa okvir ne obuhvaća red pulsa). Isto ishodište,
+    // pa se redovi iz oba izreza spajaju.
     let facc: RowRead[] = [];
-    for (const frac of [0.08, 0.12, 0.05]) {
-      facc = mergeReads([...facc, ...readsAt(crop, cw, ch, frac, debug ? (info) => debug({ frame: [f.x0, f.y0, f.x1, f.y1], ...(info as object) }) : undefined, undefined, true)]);
-      const r = choose(facc, cw, ch);
-      if (!r) continue;
-      consider({ ...r, rect: { x: (cx0 + r.rect.x * cw) / sw, y: (cy0 + r.rect.y * ch) / sh, w: (r.rect.w * cw) / sw, h: (r.rect.h * ch) / sh } });
-      if (done()) return clip(state.best!);
+    for (const ext of [0, 0.3]) {
+      const cy1 = Math.min(sh - 1, f.y1 - (ext ? 0 : inset) + Math.round((f.y1 - f.y0) * ext));
+      const ch = cy1 - cy0 + 1;
+      if (ch < sh * 0.1) continue;
+      const crop = new Uint8ClampedArray(cw * ch);
+      for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) crop[y * cw + x] = g[(cy0 + y) * sw + cx0 + x];
+      for (const frac of [0.08, 0.12, 0.05]) {
+        facc = mergeReads([...facc, ...readsAt(crop, cw, ch, frac, debug ? (info) => debug({ frame: [f.x0, f.y0, f.x1, f.y1], ext, ...(info as object) }) : undefined, undefined, true)]);
+        const r = choose(facc, cw, ch);
+        if (!r) continue;
+        consider({ ...r, rect: { x: (cx0 + r.rect.x * cw) / sw, y: (cy0 + r.rect.y * ch) / sh, w: (r.rect.w * cw) / sw, h: (r.rect.h * ch) / sh } });
+        if (done()) return clip(state.best!);
+      }
     }
   }
   if (state.best) return clip(state.best);
@@ -190,7 +200,7 @@ function readsAt(g: Uint8ClampedArray, sw: number, sh: number, winFrac: number, 
       const aspect = ch / cw, fill = c.area / (cw * ch);
       cands.push([c.x0, c.y0, c.x1, c.y1, +fill.toFixed(2)]);
       if (aspect < 1.05 || aspect > 7) continue;
-      if (aspect < 2.8 && fill > 0.72) continue;
+      if (aspect < 2.8 && fill > 0.85) continue; // puna mrlja (ikona, pravokutnik); debela „8” ima udio tinte do ~0,8
       glyphs.push({ x0: c.x0, x1: c.x1, y0: c.y0, y1: c.y1, bits: new Uint8Array(GW * GH), segs: segmentsOf(ink, sw, c) });
       cands[cands.length - 1].push(glyphs[glyphs.length - 1].segs as never);
     }
@@ -257,7 +267,7 @@ function choose(reads: RowRead[], sw: number, sh: number): AutoDetectResult | nu
   const all = [best.s, best.d, ...(best.p ? [best.p] : [])];
   const x0 = Math.min(...all.flatMap((r) => r.boxes.map((b) => b.x0))), x1 = Math.max(...all.flatMap((r) => r.boxes.map((b) => b.x1)));
   // ako red pulsa nije nađen (manje znamenke), okvir se produžuje ispod DIA-e za otprilike jedan red
-  const y0 = best.s.y0, y1 = best.p ? best.p.y1 : Math.min(sh - 1, best.d.y1 + best.d.height * 1.25);
+  const y0 = best.s.y0, y1 = best.p ? best.p.y1 : best.d.y1 + best.d.height * 1.5;
   const mh = best.s.height * 0.35, mw = (x1 - x0) * 0.12;
   // okvir s rubom smije prijeći granice ove slike (kad se radi unutar okvira zaslona); obrezuje ga pozivatelj
   const rect = { x: (x0 - mw) / sw, y: (y0 - mh) / sh, w: (x1 + mw) / sw, h: (y1 + mh) / sh };
