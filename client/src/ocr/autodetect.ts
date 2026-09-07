@@ -78,7 +78,7 @@ export function autoDetect(gray: Uint8ClampedArray, w: number, h: number, debug?
   const done = () => state.best !== null && state.best.rows === 3;
   let acc: RowRead[] = [];
   for (const frac of [0.06, 0.09, 0.04]) {
-    acc = mergeReads([...acc, ...readsAt(g, sw, sh, frac, debug, frames)]);
+    acc = mergeReads([...acc, ...readsAt(g, sw, sh, frac, sh, debug, frames)]);
     consider(choose(acc, sw, sh));
     if (done()) break;
   }
@@ -91,12 +91,12 @@ export function autoDetect(gray: Uint8ClampedArray, w: number, h: number, debug?
     .sort((a, b) => (b.x1 - b.x0) * (b.y1 - b.y0) - (a.x1 - a.x0) * (a.y1 - a.y0)).slice(0, 3);
   for (const f of uniq) {
     const fw = f.x1 - f.x0 + 1, fh = f.y1 - f.y0 + 1;
-    // Zajedničko ishodište za sve varijante: okvir proširen za 5 % (i za 30 % visine prema dolje, jer je
+    // Zajedničko ishodište za sve varijante: okvir proširen za 5 % (i za 60 % visine prema dolje, jer je
     // donji rub LCD-a često zasebna komponenta pa okvir ne obuhvaća red pulsa). Redovi iz svih varijanti
     // spajaju se u tom koordinatnom sustavu.
     const pad = Math.round(Math.min(fw, fh) * 0.05) + 2;
     const ex0 = Math.max(0, f.x0 - pad), ey0 = Math.max(0, f.y0 - pad);
-    const ex1 = Math.min(sw - 1, f.x1 + pad), ey1 = Math.min(sh - 1, f.y1 + Math.round(fh * 0.3));
+    const ex1 = Math.min(sw - 1, f.x1 + pad), ey1 = Math.min(sh - 1, f.y1 + Math.round(fh * 0.6));
     const ew = ex1 - ex0 + 1, eh = ey1 - ey0 + 1;
     if (ew < sw * 0.1 || eh < sh * 0.1) continue;
     const inset = Math.round(Math.min(fw, fh) * 0.03) + 2;
@@ -115,9 +115,10 @@ export function autoDetect(gray: Uint8ClampedArray, w: number, h: number, debug?
       // relativni kontrast pomaže na tamnom LCD-u u sjeni, apsolutni na svijetlom LCD-u pri dnevnom svjetlu
       // (relativni ondje gubi slabije desne segmente); redovi iz obiju binarizacija se spajaju
       for (const [frac, relative] of [[0.08, true], [0.08, false], [0.12, true], [0.05, true], [0.05, false], [0.12, false]] as [number, boolean][]) {
-        const reads = readsAt(crop, cw, ch, frac, debug ? (info) => debug({ frame: [f.x0, f.y0, f.x1, f.y1], variant: vi, relative, ...(info as object) }) : undefined, undefined, relative);
+        const reads = readsAt(crop, cw, ch, frac, sh, debug ? (info) => debug({ frame: [f.x0, f.y0, f.x1, f.y1], variant: vi, relative, ...(info as object) }) : undefined, undefined, relative);
         facc = mergeReads([...facc, ...shiftReads(reads, vx0, vy0)]);
         const r = choose(facc, ew, eh);
+        debug?.({ step: 'choose', frame: [f.x0, f.y0, f.x1, f.y1], variant: vi, frac, relative, acc: facc.map((x) => [x.value, x.y0, x.y1, x.boxes.map((b) => b.digit).join('')]), rows: r?.rows ?? null });
         if (!r) continue;
         consider({ ...r, rect: { x: (ex0 + r.rect.x * ew) / sw, y: (ey0 + r.rect.y * eh) / sh, w: (r.rect.w * ew) / sw, h: (r.rect.h * eh) / sh } });
         if (done()) return clip(state.best!);
@@ -140,7 +141,11 @@ function clip(r: AutoDetectResult): AutoDetectResult {
 }
 
 /** Redovi znamenki (s dekodiranom vrijednošću) na jednoj binarizaciji slike. */
-function readsAt(g: Uint8ClampedArray, sw: number, sh: number, winFrac: number, debug?: (info: unknown) => void, frames?: Box[], relative = false): RowRead[] {
+/**
+ * Granice veličine znamenke vežu se uz visinu CIJELE umanjene fotografije (`ref`), a ne uz visinu izreza:
+ * znamenke su jednako visoke u svakom izrezu, pa u niskom izrezu (samo SYS i DIA) ne ispadaju kao „prevelike”.
+ */
+function readsAt(g: Uint8ClampedArray, sw: number, sh: number, winFrac: number, ref: number, debug?: (info: unknown) => void, frames?: Box[], relative = false): RowRead[] {
   const bin = preprocessGray(g, sw, sh, { adaptive: true, closingWindow: Math.max(9, Math.round(sh * winFrac) | 1), relative }).gray;
   const ink = inkFromGray(bin, 128);
   // blaga dilatacija spaja segmente iste znamenke koji se ne dodiruju u kutovima
@@ -153,11 +158,11 @@ function readsAt(g: Uint8ClampedArray, sw: number, sh: number, winFrac: number, 
   }
   // komponente koje mogu biti (dio) znamenke: ne prevelike i ne sitne
   // znamenke mogu biti i vrlo velike (tijesan izrez ili blizu snimljeno): do 45 % visine
-  const parts = comps.filter((b) => { const bw = b.x1 - b.x0 + 1, bh = b.y1 - b.y0 + 1; return bh >= sh * 0.012 && bh <= sh * 0.45 && bw <= sw * 0.5; });
+  const parts = comps.filter((b) => { const bw = b.x1 - b.x0 + 1, bh = b.y1 - b.y0 + 1; return bh >= Math.min(sh, ref) * 0.012 && bh <= ref * 0.45 && bw <= sw * 0.5; });
   // sjeme redova: visoke uspravne komponente (cijele znamenke ili njihovi okomiti segmenti)
   // (vrlo tanke visoke šipke – traka u boji uz zaslon, rub kućišta – nisu znamenke ni njihovi segmenti,
   // a spojile bi susjedne redove u jedan)
-  const seeds = parts.filter((b) => { const bw = b.x1 - b.x0 + 1, bh = b.y1 - b.y0 + 1; return bh >= sh * 0.03 && bh / bw >= 1.1 && bh / bw <= 7; }).sort((a, b) => (b.y1 - b.y0) - (a.y1 - a.y0));
+  const seeds = parts.filter((b) => { const bw = b.x1 - b.x0 + 1, bh = b.y1 - b.y0 + 1; return bh >= Math.min(sh, ref) * 0.03 && bh / bw >= 1.1 && bh / bw <= 7; }).sort((a, b) => (b.y1 - b.y0) - (a.y1 - a.y0));
   const rows: { y0: number; y1: number; members: Box[] }[] = [];
   // red s najvećim okomitim preklapanjem (a ne prvi koji sadrži središte: gornja polovica odlomljene „1”
   // inače završi u redu ruba zaslona iznad)

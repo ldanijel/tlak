@@ -112,18 +112,18 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
       } else { const n = new Date(); setDate(toInputDate(n)); setTime(toInputTime(n)); setDateSrc('now'); }
       // 1) automatsko pronalaženje redova znamenki; 2) zapamćeni raspored; 3) ručni izrez.
       // Svaki automatski pokušaj prolazi samo ako su SYS i DIA pouzdano pročitani; inače slijedi idući korak.
-      const attempts: { origin: 'auto' | 'memory'; rect: Rect; dividers: [number, number] }[] = [];
+      const attempts: { origin: 'auto' | 'memory'; rect: Rect; dividers: [number, number]; values?: { systolic: number | null; diastolic: number | null; pulse: number | null } }[] = [];
       autoTrace.current = [];
       const found = detectDisplay(c);
       autoTrace.current.push({ step: 'autoDetect', found: found ? { rows: found.rows, rect: { x: found.rect.x / c.width, y: found.rect.y / c.height, w: found.rect.w / c.width, h: found.rect.h / c.height }, dividers: found.dividers } : null });
-      if (found && found.rows >= 2) attempts.push({ origin: 'auto', rect: found.rect, dividers: found.dividers });
+      if (found && found.rows >= 2) attempts.push({ origin: 'auto', rect: found.rect, dividers: found.dividers, values: found.values });
       if (model?.layout) {
         const l = model.layout;
         attempts.push({ origin: 'memory', rect: { x: l.rect.x * c.width, y: l.rect.y * c.height, w: l.rect.w * c.width, h: l.rect.h * c.height }, dividers: l.dividers });
       }
       for (const a of attempts) {
         setRect(a.rect); setDividers(a.dividers); setLayoutApplied(a.origin === 'memory'); setAutoFound(a.origin); setOrigin(a.origin);
-        const ok = await runOcrWith(c, a.rect, a.dividers, a.origin);
+        const ok = await runOcrWith(c, a.rect, a.dividers, a.origin, a.values);
         if (ok) return;
       }
       // Ni jedan automatski pokušaj nije bio pouzdan: ručni izrez, s najboljim dosad poznatim okvirom kao početnim.
@@ -144,7 +144,7 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
   };
 
   /** Sivi raster fotografije za automatsko pronalaženje zaslona. */
-  const detectDisplay = (c: HTMLCanvasElement): { rect: Rect; dividers: [number, number]; rows: number } | null => {
+  const detectDisplay = (c: HTMLCanvasElement): { rect: Rect; dividers: [number, number]; rows: number; values: { systolic: number | null; diastolic: number | null; pulse: number | null } } | null => {
     try {
       const d = c.getContext('2d', { willReadFrequently: true })!.getImageData(0, 0, c.width, c.height).data;
       const gray = new Uint8ClampedArray(c.width * c.height);
@@ -152,7 +152,7 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
       autoInfo.current = null;
       const r = autoDetect(gray, c.width, c.height, (info) => { autoInfo.current = info; });
       if (!r) return null;
-      return { rect: { x: r.rect.x * c.width, y: r.rect.y * c.height, w: r.rect.w * c.width, h: r.rect.h * c.height }, dividers: r.dividers, rows: r.rows };
+      return { rect: { x: r.rect.x * c.width, y: r.rect.y * c.height, w: r.rect.w * c.width, h: r.rect.h * c.height }, dividers: r.dividers, rows: r.rows, values: r.values };
     } catch (e) {
       console.warn('autoDetect', e);
       return null;
@@ -162,13 +162,22 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
   const runOcr = () => { setOrigin('manual'); setAutoFound(null); setAutoNotice(null); void runOcrWith(source, rect, dividers, 'manual'); };
   /** Automatski izrez vrijedi samo ako su SYS i DIA pročitani dovoljno pouzdano i bez upozorenja o pomaknutom okviru. */
   const reliable = (r: OcrResult) => r.systolic.value !== null && r.diastolic.value !== null && r.systolic.confidence >= 55 && r.diastolic.confidence >= 55 && r.alignmentWarnings.length === 0 && r.systolic.value > r.diastolic.value;
-  const runOcrWith = async (src: HTMLCanvasElement | null, r0: Rect, div: [number, number], from: 'auto' | 'memory' | 'manual'): Promise<boolean> => {
+  const runOcrWith = async (src: HTMLCanvasElement | null, r0: Rect, div: [number, number], from: 'auto' | 'memory' | 'manual', autoValues?: { systolic: number | null; diastolic: number | null; pulse: number | null }): Promise<boolean> => {
     if (!src) return false;
     setStage('ocr');
     try {
       const display = cropRotate(src, r0, 0);
       const r = await recognizeBands(display, div, (s, p) => setProgress({ stage: s, p }), modelData);
-      autoTrace.current.push({ step: 'ocr', from, reliable: reliable(r), systolic: r.systolic, diastolic: r.diastolic, pulse: r.pulse, alignmentWarnings: r.alignmentWarnings, warnings: r.warnings });
+      // Auto-detekcija je pri pronalaženju zaslona već dekodirala znamenke (dekoder segmenata na cijeloj fotografiji).
+      // Gdje glavni cjevovod ne pročita polje (sitne znamenke, udaljena snimka), njezina vrijednost ulazi kao
+      // prijedlog s pouzdanošću 60 % (korisnik je mora dodirnuti), umjesto slanja na ručni izrez.
+      if (autoValues) {
+        for (const k of ['systolic', 'diastolic', 'pulse'] as const) {
+          const v = autoValues[k];
+          if (v !== null && (r[k].value === null || r[k].confidence < 55)) r[k] = r[k].value === v ? { value: v, confidence: Math.max(r[k].confidence, 70) } : { value: v, confidence: 60, reason: `auto-detekcija zaslona${r[k].value !== null ? `, OCR ${r[k].value}` : ''}` };
+        }
+      }
+      autoTrace.current.push({ step: 'ocr', from, reliable: reliable(r), autoValues: autoValues ?? null, systolic: r.systolic, diastolic: r.diastolic, pulse: r.pulse, alignmentWarnings: r.alignmentWarnings, warnings: r.warnings });
       if (from !== 'manual' && !reliable(r)) return false;
       if (r.dividers) setDividers(r.dividers); // horizontale privučene na prazne retke ostaju zapamćene
       setResult(r);

@@ -170,6 +170,11 @@ createdAt, updatedAt) i ostaje mapljiv na HealthKit/Health Connect.
   i za svaki OCR pokušaj (auto / zapamćeni raspored / ručno) očitanja i je li prošao provjeru pouzdanosti.
 - Odrezanost i vodoravno: zadnja znamenka koja dodiruje desni rub zone (zapamćeni raspored preuzak za novi kadar)
   označava očitanje nepouzdanim. Prag samostalnog popunjavanja polja: 70 %, a 60 % kad je naučeni model aktivan.
+- Auto-detekcija, peti krug (dijagnostika 132/88/81 i udaljena 141/95/61): granice veličine znamenke u prolazu po
+  okviru vežu se uz visinu cijele fotografije, a ne uz visinu izreza (u niskom izrezu SYS/DIA znamenke su ispadale
+  kao „prevelike”); unutrašnjost okvira produžuje se prema dolje za 60 % visine. Vrijednosti koje je auto-detekcija
+  sama dekodirala ulaze kao prijedlog (60 %) gdje glavni cjevovod ne pročita polje, umjesto slanja na ručni izrez.
+  Šesti trajni primjer: `132-88-81.jpg`.
 - Inverzija polariteta samo kad je uz nisku srednju svjetlinu i svijetli rep histograma jači od tamnog: tamni LCD u
   sjeni (BM38, zona pulsa) s još tamnijim znamenkama više se ne invertira (prije je to zonu pulsa pretvaralo u mrlje).
 - Nakon rezanja svijetlog ruba (`trimDisplay`) horizontale se preračunaju na novu visinu.
