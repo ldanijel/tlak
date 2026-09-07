@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
-import { segmentDigits, learn, classifyBand, emptyModel, modelReady, bitsToBase64, base64ToBits, GW, GH } from '../src/ocr/learn.ts';
+import { segmentDigits, learn, classifyBand, emptyModel, modelReady, bitsToBase64, base64ToBits, decodeBandSevenSegment, GW, GH } from '../src/ocr/learn.ts';
 import { preprocessGray } from '../src/ocr/preprocess.ts';
 
 /** Minimalni čitač 8-bitnog sivog PNG-a (testna slika seg.png generirana u skripti). */
@@ -74,4 +74,12 @@ test('adaptivna binarizacija: znamenke ostaju čitljive uz gradijent odsjaja', (
   const ink = new Uint8Array(img.w * (y1 - y0));
   for (let y = y0; y < y1; y++) for (let x = 0; x < img.w; x++) ink[(y - y0) * img.w + x] = r.gray[y * img.w + x] < 128 ? 1 : 0;
   assert.equal(segmentDigits(ink, img.w, y1 - y0).length, 3);
+});
+
+test('dekoder segmenata bez učenja čita sintetičke znamenke', () => {
+  const img = readGrayPng(png);
+  const b0 = band(img, 0, 0.34), b1 = band(img, 0.34, 0.67), b2 = band(img, 0.67, 1);
+  assert.equal(decodeBandSevenSegment(segmentDigits(b0.ink, b0.w, b0.h), [50, 260]).value, 128);
+  assert.equal(decodeBandSevenSegment(segmentDigits(b1.ink, b1.w, b1.h), [30, 160]).value, 82);
+  assert.equal(decodeBandSevenSegment(segmentDigits(b2.ink, b2.w, b2.h), [25, 220]).value, 66);
 });

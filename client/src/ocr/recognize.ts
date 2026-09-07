@@ -1,8 +1,8 @@
 import { createWorker, OEM, PSM, type Worker } from 'tesseract.js';
 import { parseBand, parseReading, type FieldGuess, type ParsedReading, type Token } from './parse.ts';
 import { TECHNICAL_RANGE } from '../types.ts';
-import { preprocess } from './preprocess.ts';
-import { checkAlignment, classifyBand, emptyModel, inkFromGray, modelReady, segmentDigits, type BandDims, type Glyph, type OcrModelData } from './learn.ts';
+import { preprocess, trimBezel } from './preprocess.ts';
+import { checkAlignment, classifyBand, decodeBandSevenSegment, emptyModel, inkFromGray, modelReady, rightmostDigits, segmentDigits, type BandDims, type Glyph, type OcrModelData } from './learn.ts';
 
 const PATHS = {
   workerPath: '/tesseract/worker.min.js',
@@ -46,7 +46,7 @@ function tokensOf(page: { blocks: { paragraphs: { lines: { words: { text: string
   return out;
 }
 
-export interface OcrResult extends ParsedReading { engine: string; debug: { digits: Token[]; text: Token[] }; preview: string; glyphs: Glyph[][]; bandDims: BandDims[]; variantWinner: (string | null)[]; learned: boolean[]; alignmentWarnings: string[]; diagnostics: { display: string; bands: { raw: string; adaptive: string }[] } }
+export interface OcrResult extends ParsedReading { dividers?: [number, number]; engine: string; debug: { digits: Token[]; text: Token[] }; preview: string; glyphs: Glyph[][]; bandDims: BandDims[]; variantWinner: (string | null)[]; learned: boolean[]; alignmentWarnings: string[]; diagnostics: { display: string; bands: { raw: string; adaptive: string }[] } }
 
 /**
  * Prepoznaje SYS/DIA/puls s izrezanog zaslona tlakomjera. Obrada je u cijelosti lokalna.
@@ -91,14 +91,91 @@ export async function recognizeDisplay(display: HTMLCanvasElement, onProgress?: 
   return { ...best.parsed, engine: best.engine, debug: { digits: best.digits, text: best.text }, preview, glyphs: [], bandDims: [], variantWinner: [], learned: [], alignmentWarnings: [], diagnostics: { display: '', bands: [] } };
 }
 
+function grayOf(c: HTMLCanvasElement): Uint8ClampedArray {
+  const d = c.getContext('2d', { willReadFrequently: true })!.getImageData(0, 0, c.width, c.height).data;
+  const g = new Uint8ClampedArray(c.width * c.height);
+  for (let i = 0, j = 0; i < d.length; i += 4, j++) g[j] = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000;
+  return g;
+}
+
+/**
+ * Privlači horizontale na prazne retke između redova znamenki (± 10 % visine): korisnik ih rijetko
+ * postavi točno, a horizontala kroz znamenke odreže im dno i „prelije” ga u iduću zonu.
+ */
+function snapDividers(display: HTMLCanvasElement, dividers: [number, number]): [number, number] {
+  const pre = preprocess(display, { adaptive: true, targetHeight: 480 }).canvas;
+  const g = grayOf(pre);
+  const w = pre.width, h = pre.height;
+  // gledamo samo desnih 70 % širine: ondje su znamenke, a ikone i rubovi slijeva nikad ne daju prazan redak
+  const xs = Math.round(w * 0.3);
+  const rowInk = new Float32Array(h);
+  for (let y = 0; y < h; y++) { let n = 0; for (let x = xs; x < w; x++) if (g[y * w + x] < 128) n++; rowInk[y] = n / (w - xs); }
+  // „prazan” redak je relativan: rub zaslona ili natpis uz desni rub daju stalnu malu količinu tinte
+  let base = 1, peak = 0;
+  for (let y = Math.round(h * 0.05); y < h * 0.95; y++) { if (rowInk[y] < base) base = rowInk[y]; if (rowInk[y] > peak) peak = rowInk[y]; }
+  const empty = (y: number) => rowInk[y] <= base + 0.15 * (peak - base);
+  const out: [number, number] = [...dividers] as [number, number];
+  for (let i = 0; i < 2; i++) {
+    const y = Math.round(dividers[i] * h);
+    if (empty(y)) continue;
+    const lim = Math.round(h * 0.15);
+    let best = -1;
+    for (let d = 1; d <= lim && best < 0; d++) {
+      for (const cand of [y - d, y + d]) if (cand > 0 && cand < h - 1 && empty(cand)) { best = cand; break; }
+    }
+    if (best < 0) continue;
+    // unutar labavo praznog niza uzimamo sredinu strogo praznog dijela (donji segment znamenke
+    // ima malo tinte i inače bi pomaknuo horizontalu u znamenku), a ako ga nema, redak s najmanje tinte
+    let a = best, b = best;
+    while (a > 0 && empty(a - 1)) a--;
+    while (b < h - 1 && empty(b + 1)) b++;
+    const strict = base + 0.06 * (peak - base);
+    let sa = -1, sb = -1, minY = a;
+    for (let y = a; y <= b; y++) {
+      if (rowInk[y] < rowInk[minY]) minY = y;
+      if (rowInk[y] <= strict) { if (sa < 0) sa = y; sb = y; }
+    }
+    out[i] = (sa >= 0 ? (sa + sb) / 2 : minY) / h;
+  }
+  if (out[1] - out[0] < 0.1) return dividers;
+  return out;
+}
+
+/** Odreže svijetli rub kućišta ako ga je korisnik uhvatio okvirom; vraća samo LCD. */
+function trimDisplay(display: HTMLCanvasElement): HTMLCanvasElement {
+  const g = grayOf(display);
+  const t = trimBezel(g, display.width, display.height);
+  const w = t.x1 - t.x0 + 1, h = t.y1 - t.y0 + 1;
+  if (w < display.width * 0.5 || h < display.height * 0.5) return display;
+  if (t.x0 === 0 && t.y0 === 0 && w === display.width && h === display.height) return display;
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  c.getContext('2d')!.drawImage(display, t.x0, t.y0, w, h, 0, 0, w, h);
+  return c;
+}
+
+/**
+ * Zona s podstavom ponavljanjem rubnih piksela: bez diskontinuiteta na rubu, pa ni bijela podstava
+ * ni jednobojna ispuna ne stvaraju lažnu „tintu” pri binarizaciji (procjena pozadine ide preko ruba).
+ */
 function sliceBand(src: HTMLCanvasElement, from: number, to: number): HTMLCanvasElement {
   const y0 = Math.max(0, Math.round(src.height * from)), y1 = Math.min(src.height, Math.round(src.height * to));
   const pad = Math.round(src.width * 0.06);
+  const tw = src.width, th = Math.max(1, y1 - y0);
+  const tmp = document.createElement('canvas');
+  tmp.width = tw; tmp.height = th;
+  tmp.getContext('2d')!.drawImage(src, 0, y0, tw, th, 0, 0, tw, th);
   const c = document.createElement('canvas');
-  c.width = src.width + pad * 2; c.height = Math.max(1, y1 - y0) + pad * 2;
+  c.width = tw + pad * 2; c.height = th + pad * 2;
   const ctx = c.getContext('2d')!;
-  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
-  ctx.drawImage(src, 0, y0, src.width, y1 - y0, pad, pad, src.width, y1 - y0);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(tmp, pad, pad);
+  ctx.drawImage(tmp, 0, 0, tw, 1, pad, 0, tw, pad); // gore
+  ctx.drawImage(tmp, 0, th - 1, tw, 1, pad, pad + th, tw, pad); // dolje
+  ctx.drawImage(tmp, 0, 0, 1, th, 0, pad, pad, th); // lijevo
+  ctx.drawImage(tmp, tw - 1, 0, 1, th, pad + tw, pad, pad, th); // desno
+  ctx.drawImage(tmp, 0, 0, 1, 1, 0, 0, pad, pad); ctx.drawImage(tmp, tw - 1, 0, 1, 1, pad + tw, 0, pad, pad);
+  ctx.drawImage(tmp, 0, th - 1, 1, 1, 0, pad + th, pad, pad); ctx.drawImage(tmp, tw - 1, th - 1, 1, 1, pad + tw, pad + th, pad, pad);
   return c;
 }
 
@@ -116,8 +193,10 @@ function scaleNearest(src: HTMLCanvasElement, factor: number): HTMLCanvasElement
  * Svaka zona čita se zasebno (bez oslanjanja na položajnu heuristiku), s oba modela i obje predobrade;
  * uzima se očitanje s najvišom pouzdanošću.
  */
-export async function recognizeBands(display: HTMLCanvasElement, dividers: [number, number], onProgress?: (stage: string, p: number) => void, model: OcrModelData = emptyModel()): Promise<OcrResult> {
+export async function recognizeBands(displayIn: HTMLCanvasElement, dividersIn: [number, number], onProgress?: (stage: string, p: number) => void, model: OcrModelData = emptyModel()): Promise<OcrResult> {
   onProgress?.('Učitavanje OCR modela', 0.05);
+  const display = trimDisplay(displayIn);
+  const dividers = snapDividers(display, dividersIn);
   const workers: { name: string; w: Worker }[] = [];
   try { workers.push({ name: 'letsgodigital', w: await getDigitWorker((p) => onProgress?.('Učitavanje modela znamenki', 0.05 + p * 0.25)) }); } catch (e) { console.warn(e); }
   try { const w = await getTextWorker(); await w.setParameters({ tessedit_char_whitelist: '0123456789', tessedit_pageseg_mode: PSM.SINGLE_LINE }); workers.push({ name: 'eng', w }); } catch (e) { console.warn(e); }
@@ -133,7 +212,7 @@ export async function recognizeBands(display: HTMLCanvasElement, dividers: [numb
   const variantWinner: (string | null)[] = [];
   const learned: boolean[] = [];
   let engineUsed = '';
-  const VARIANT_NAMES = ['raw', 'nearest2x', 'gray320', 'bin320', 'adaptive320'];
+  const VARIANT_NAMES = ['raw', 'nearest2x', 'gray320', 'bin320', 'adaptive320', 'digitsOnly'];
   const diagBands: { raw: string; adaptive: string }[] = [];
   for (let i = 0; i < 3; i++) {
     onProgress?.(`Čitanje: ${names[i]}`, 0.3 + i * 0.22);
@@ -157,6 +236,20 @@ export async function recognizeBands(display: HTMLCanvasElement, dividers: [numb
     for (let k = 0, j = 0; k < bd.length; k += 4, j++) gray[j] = bd[k];
     const glyphs = segmentDigits(inkFromGray(gray, 128), bin.width, bin.height); // zona je već binarizirana (0/255)
     glyphsPerBand.push(glyphs);
+    // Tesseract dodatno čita samo izrezane znamenke (bez ikona i rubova), na čistoj binariziranoj slici
+    const kept = rightmostDigits(glyphs, 3);
+    if (kept.length >= 2) {
+      const x0 = Math.min(...kept.map((g) => g.x0)), x1 = Math.max(...kept.map((g) => g.x1));
+      const y0 = Math.min(...kept.map((g) => g.y0)), y1 = Math.max(...kept.map((g) => g.y1));
+      const p = Math.round((y1 - y0) * 0.25);
+      const c = document.createElement('canvas');
+      c.width = x1 - x0 + 1 + 2 * p; c.height = y1 - y0 + 1 + 2 * p;
+      const cx = c.getContext('2d')!;
+      cx.fillStyle = '#fff'; cx.fillRect(0, 0, c.width, c.height);
+      cx.drawImage(bin, x0, y0, x1 - x0 + 1, y1 - y0 + 1, p, p, x1 - x0 + 1, y1 - y0 + 1);
+      variants.push(c);
+    }
+    const seg = decodeBandSevenSegment(glyphs, ranges[i]);
     bandDims.push({ w: bin.width, h: bin.height });
     const align = checkAlignment(model, i, glyphs, { w: bin.width, h: bin.height });
     if (align) alignmentWarnings.push(align);
@@ -171,6 +264,12 @@ export async function recognizeBands(display: HTMLCanvasElement, dividers: [numb
         const score = (x: FieldGuess) => (x.value === null ? -1 : x.confidence + (model.variantWins[`${name}/${VARIANT_NAMES[vi]}`] || 0) * 0.5);
         if (score(g) > score(best)) { best = g; engineUsed = name; bestVariant = `${name}/${VARIANT_NAMES[vi]}`; }
       }
+    }
+    // dekoder segmenata (bez učenja): siguran je kad su segmenti jasno uključeni/isključeni
+    if (seg.value !== null) {
+      if (best.value === seg.value) best = { value: seg.value, confidence: Math.max(best.confidence, seg.confidence, 85) };
+      else if (best.value === null || seg.confidence >= 75) best = { value: seg.value, confidence: Math.min(seg.confidence, best.value === null ? seg.confidence : 65), reason: best.value === null ? undefined : `segmenti ${seg.value}, OCR ${best.value}` };
+      if (!bestVariant) bestVariant = 'sevenseg';
     }
     // spajanje s naučenim modelom: slaganje diže pouzdanost, neslaganje traži ručnu provjeru
     let used = false;
@@ -202,7 +301,7 @@ export async function recognizeBands(display: HTMLCanvasElement, dividers: [numb
   small.width = Math.round(display.width * sf); small.height = Math.round(display.height * sf);
   small.getContext('2d')!.drawImage(display, 0, 0, small.width, small.height);
   const diagnostics = { display: small.toDataURL('image/jpeg', 0.8), bands: diagBands };
-  return { systolic, diastolic, pulse, score: (systolic.confidence + diastolic.confidence + pulse.confidence) / 3, warnings: [...alignmentWarnings, ...warnings], engine: learned.some(Boolean) ? `${engineUsed || workers[0].name} + naučeni model` : engineUsed || workers[0].name, debug: { digits: debugTokens, text: [] }, preview, glyphs: glyphsPerBand, bandDims, variantWinner, learned, alignmentWarnings, diagnostics };
+  return { systolic, diastolic, pulse, dividers, score: (systolic.confidence + diastolic.confidence + pulse.confidence) / 3, warnings: [...alignmentWarnings, ...warnings], engine: learned.some(Boolean) ? `${engineUsed || workers[0].name} + naučeni model` : engineUsed || workers[0].name, debug: { digits: debugTokens, text: [] }, preview, glyphs: glyphsPerBand, bandDims, variantWinner, learned, alignmentWarnings, diagnostics };
 }
 
 export async function warmUpOcr(): Promise<void> {

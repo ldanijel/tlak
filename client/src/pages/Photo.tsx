@@ -98,6 +98,7 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
     try {
       const display = cropRotate(source, rect, 0);
       const r = await recognizeBands(display, dividers, (s, p) => setProgress({ stage: s, p }), modelData);
+      if (r.dividers) setDividers(r.dividers); // horizontale privučene na prazne retke ostaju zapamćene
       setResult(r);
       setSys(r.systolic.value); setDia(r.diastolic.value); setPulse(r.pulse.value);
       setMsgs([]); setConfirmed(false);
