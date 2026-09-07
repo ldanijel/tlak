@@ -1,0 +1,58 @@
+# Objava na Fly.io iz preglednika: GitHub → Actions → „Objavi na Fly.io” → Run workflow.
+# Potrebne tajne (Settings → Secrets and variables → Actions):
+#   FLY_API_TOKEN  – deploy token iz Fly.io nadzorne ploče (obvezno)
+#   INVITE_CODE    – pozivni kod za registraciju (preporučeno)
+# Varijable (Variables): FLY_APP_NAME – naziv aplikacije (za automatsku objavu pri pushu na main);
+#   FLY_ALLOW_REGISTRATION – 'false' zatvara registraciju novih računa.
+name: Objavi na Fly.io
+on:
+  workflow_dispatch:
+    inputs:
+      app_name:
+        description: 'Naziv aplikacije na Fly.io (jedinstven; mala slova, brojke, crtice), npr. tlak-prezime'
+        required: true
+      region:
+        description: 'Regija (fra = Frankfurt)'
+        required: false
+        default: 'fra'
+  push:
+    branches: [main]
+concurrency: fly-deploy
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      INVITE_CODE: ${{ secrets.INVITE_CODE }}
+      APP: ${{ inputs.app_name || vars.FLY_APP_NAME }}
+      REGION: ${{ inputs.region || 'fra' }}
+      ALLOW_REG: ${{ vars.FLY_ALLOW_REGISTRATION }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Provjera postavki
+        run: |
+          [ -n "$FLY_API_TOKEN" ] || { echo "::error::Nedostaje tajna FLY_API_TOKEN (Settings → Secrets → Actions)."; exit 1; }
+          [ -n "$APP" ] || { echo "::error::Nedostaje naziv aplikacije (unos app_name ili varijabla FLY_APP_NAME)."; exit 1; }
+          echo "Aplikacija: $APP, regija: $REGION"
+      - name: Upiši naziv i regiju u fly.toml
+        run: |
+          sed -i "s/^app = .*/app = \"$APP\"/" fly.toml
+          sed -i "s/^primary_region = .*/primary_region = \"$REGION\"/" fly.toml
+          head -5 fly.toml
+      - name: Stvori aplikaciju ako ne postoji
+        run: |
+          if flyctl apps list --json | grep -qi "\"name\": *\"$APP\""; then echo "Aplikacija postoji."; else flyctl apps create "$APP" --org personal; fi
+      - name: Stvori disk za bazu ako ne postoji
+        run: |
+          if flyctl volumes list -a "$APP" --json | grep -qi '"name": *"tlak_data"'; then echo "Disk postoji."; else flyctl volumes create tlak_data -a "$APP" --region "$REGION" --size 1 --yes; fi
+      - name: Postavi pozivni kod
+        run: |
+          if [ -n "$INVITE_CODE" ]; then flyctl secrets set INVITE_CODE="$INVITE_CODE" -a "$APP" --stage; else echo "INVITE_CODE nije postavljen – registracija je otvorena svima koji znaju adresu."; fi
+      - name: Otvorena ili zatvorena registracija
+        run: |
+          if [ -n "$ALLOW_REG" ]; then flyctl secrets set ALLOW_REGISTRATION="$ALLOW_REG" -a "$APP" --stage; fi
+      - name: Objavi
+        run: flyctl deploy --remote-only -a "$APP" --ha=false
+      - name: Adresa
+        run: echo "::notice::Aplikacija je na https://$APP.fly.dev"

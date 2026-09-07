@@ -120,7 +120,9 @@ createdAt, updatedAt) i ostaje mapljiv na HealthKit/Health Connect.
 
 - `INVITE_CODE` (varijabla okoline ili `fly secrets set INVITE_CODE=…`): kad je postavljen, registracija traži pozivni kod, pa račun
   mogu otvoriti samo osobe kojima ga date (do 10 ukućana, svatko sa svojim podacima). `/api/health` vraća `inviteRequired`.
-- Korak-po-korak upute za netehničara (Mac i Windows, bez Dockera, ispod 5 EUR mjesečno): **`docs/UPUTE-Fly.io.docx`**.
+- Korak-po-korak upute za netehničara: **`docs/UPUTE-Fly.io.docx`**. Put A ne traži nikakvu instalaciju: objavu obavlja GitHub Action
+  `.github/workflows/fly-deploy.yml` (Actions → „Objavi na Fly.io” → Run workflow) uz tajne `FLY_API_TOKEN` i `INVITE_CODE` te
+  varijablu `FLY_APP_NAME`; pri pushu na `main` objavljuje se automatski. Put B koristi `flyctl` lokalno.
 
 ## Pristup s iPhonea i pokretanje na Windowsu
 
