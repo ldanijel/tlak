@@ -27,6 +27,8 @@ export interface Store {
   sync: SyncState;
   auth: AuthState | null;
   lastBackupAt: string | null;
+  /** Zapisi s lokalnim izmjenama koje još nisu potvrđene na poslužitelju (collection/id). */
+  unsynced: Set<string>;
   save<C extends Collection>(c: C, rec: NewRecord<CollectionMap[C]>): Promise<CollectionMap[C]>;
   saveMany<C extends Collection>(c: C, recs: NewRecord<CollectionMap[C]>[]): Promise<void>;
   remove(c: Collection, id: string): Promise<void>;
@@ -66,6 +68,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [sync, setSync] = useState<SyncState>({ status: 'off', lastSyncAt: null, error: null, pending: 0 });
   const [auth, setAuthState] = useState<AuthState | null>(loadAuth());
   const [lastBackupAt, setLastBackupAt] = useState<string | null>(null);
+  const [unsynced, setUnsynced] = useState<Set<string>>(new Set());
   const raw = useRef<{ [C in Collection]: Stored<CollectionMap[C]>[] }>({ measurements: [], targets: [], devices: [], medications: [], events: [], settings: [], ocrModels: [] });
 
   const reload = useCallback(async () => {
@@ -73,6 +76,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       getAll('measurements'), getAll('targets'), getAll('devices'), getAll('medications'), getAll('events'), getAll('settings'), getAll('ocrModels'),
     ]);
     raw.current = { measurements, targets, devices, medications, events, settings, ocrModels };
+    const dirtySet = new Set<string>();
+    for (const [c, list] of Object.entries(raw.current)) for (const r of list as { id: string; dirty: 0 | 1 }[]) if (r.dirty) dirtySet.add(`${c}/${r.id}`);
+    setUnsynced(dirtySet);
     // Mjerenja koja su izbrisana i sinkronizirana zadržavamo u memoriji radi "vrati" tijekom sesije.
     const s = settings.find((x) => x.id === 'main');
     setData({
@@ -213,8 +219,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setLastBackupAt(now);
   }, []);
 
-  const value = useMemo<Store>(() => ({ ready, data, sync, auth, lastBackupAt, save, saveMany, remove, restore, removeMany, restoreMany, factoryReset, updateSettings, setAuth, restoreBackup, markBackup, reload }),
-    [ready, data, sync, auth, lastBackupAt, save, saveMany, remove, restore, removeMany, restoreMany, factoryReset, updateSettings, setAuth, restoreBackup, markBackup, reload]);
+  const value = useMemo<Store>(() => ({ ready, data, sync, auth, lastBackupAt, unsynced, save, saveMany, remove, restore, removeMany, restoreMany, factoryReset, updateSettings, setAuth, restoreBackup, markBackup, reload }),
+    [ready, data, sync, auth, lastBackupAt, unsynced, save, saveMany, remove, restore, removeMany, restoreMany, factoryReset, updateSettings, setAuth, restoreBackup, markBackup, reload]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

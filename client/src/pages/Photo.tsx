@@ -349,6 +349,7 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
             Datum i vrijeme: <strong className="tabular">{fmtDateTime(measuredAt)}</strong>{' '}
             <span className="muted">({dateSrc === 'exif' ? 'iz metapodataka fotografije' : mode === 'camera' ? 'trenutačno vrijeme' : 'metapodaci nisu dostupni – trenutačno vrijeme'})</span>
           </p>
+          {devicePicker}
           <p className="tiny">Model: {result.engine}. Ništa se ne sprema bez vaše potvrde.{deviceId ? ` Potvrdom aplikacija uči znamenke ovog tlakomjera (${sampleCount(modelData)} naučenih znamenki${modelReady(modelData) ? ', aktivno' : ', još se uči'}).` : ' Odaberite tlakomjer da bi aplikacija učila njegove znamenke.'}</p>
           {msgs.map((m, i) => <Message key={i} level={m.level}>{m.text}{m.suggestSwap && <div><button type="button" className="btn small" onClick={() => { const s = sys; setSys(dia); setDia(s); setMsgs([]); }}>Zamijeni SYS i DIA</button></div>}</Message>)}
           <label className="row small" style={{ marginTop: 6 }}><input type="checkbox" checked={series} onChange={(e) => toggleSeries(e.target.checked)} /> Nakon spremanja odmah fotografiraj sljedeće (serija mjerenja)</label>

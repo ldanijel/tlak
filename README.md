@@ -125,6 +125,10 @@ createdAt, updatedAt) i ostaje mapljiv na HealthKit/Health Connect.
 - Povijest: „Izbriši više…” sa SVE / SVE OD: / SVE DO: / RASPON OD–DO, s brojem pogođenih i gumbom „Vrati”.
 - Postavke: „Tvornički reset” ovog uređaja (potvrda riječju RESET); podaci na računu ostaju.
 - Stranica `/upute` za ukućane, s dijeljenjem linka iz Postavki.
+- Naučeni OCR model vidljivo na računu: stranica Tlakomjeri uz svaki model prikazuje „☁ spremljeno na račun” / „⏳ čeka
+  sinkronizaciju” / „📱 samo na ovom uređaju”; stranica Račun broji naučene OCR modele na poslužitelju. Nakon uspješnog slanja
+  promjena sinkronizacija odmah osvježava lokalno stanje (`store.unsynced`). Odabir tlakomjera dostupan je i na ekranu potvrde
+  (kad je zaslon pronađen automatski, bez ručnog izreza).
 
 ## Pozivni kod i preporučeni hosting (Fly.io)
 

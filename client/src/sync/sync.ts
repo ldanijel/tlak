@@ -115,7 +115,8 @@ async function run(): Promise<boolean> {
     const now = new Date().toISOString();
     await setMeta('lastSyncAt', now);
     set({ status: 'idle', lastSyncAt: now, pending: 0 });
-    if (remoteApplied && onRemoteChange) onRemoteChange();
+    // i bez udaljenih promjena zastavice „dirty” su se promijenile, pa se stanje osvježava
+    if ((remoteApplied || dirty.length) && onRemoteChange) onRemoteChange();
     return true;
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) {

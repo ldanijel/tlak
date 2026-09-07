@@ -92,7 +92,7 @@ export function AccountPage() {
           <div className="card">
             <p><strong>{auth.email}</strong></p>
             <p className="small">Stanje: {sync.status === 'syncing' ? 'sinkronizacija u tijeku…' : sync.status === 'offline' ? 'offline – promjene čekaju vezu' : sync.status === 'error' ? `greška: ${sync.error}` : `sinkronizirano ${fmtRelative(sync.lastSyncAt)}`}{sync.pending > 0 && ` · ${sync.pending} promjena čeka`}</p>
-            {me && <p className="tiny">Na poslužitelju: {me.counts.measurements || 0} mjerenja, {me.counts.targets || 0} ciljeva, {me.counts.medications || 0} lijekova, {me.counts.events || 0} događaja.</p>}
+            {me && <p className="tiny">Na poslužitelju: {me.counts.measurements || 0} mjerenja, {me.counts.targets || 0} ciljeva, {me.counts.medications || 0} lijekova, {me.counts.events || 0} događaja, {me.counts.devices || 0} tlakomjera, <strong>{me.counts.ocrModels || 0} naučenih OCR modela</strong>.</p>}
             <div className="row">
               <button type="button" className="btn primary" onClick={() => void syncNow().then((ok) => toast.show(ok ? 'Sinkronizacija dovršena.' : 'Sinkronizacija nije uspjela.'))}>⟳ Sinkroniziraj sada</button>
               <button type="button" className="btn" onClick={() => setPwOpen(true)}>Promijeni lozinku</button>

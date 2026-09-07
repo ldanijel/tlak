@@ -33,7 +33,7 @@ export function GuidePage() {
         <ol>
           <li>Postavke → Račun i sinkronizacija → <strong>Novi račun</strong>.</li>
           <li>Upišite svoju e-poštu, lozinku od najmanje 8 znakova i <strong>pozivni kod</strong> koji ste dobili.</li>
-          <li>Na drugom uređaju odaberite Prijava s istim podacima; mjerenja se sinkroniziraju.</li>
+          <li>Na drugom uređaju odaberite Prijava s istim podacima; mjerenja, tlakomjeri i naučeni OCR sinkroniziraju se.</li>
         </ol>
         <p className="small">Svatko vidi samo svoja mjerenja. Zaboravljena lozinka ne može se poslati e-poštom, zato povremeno izradite kopiju (Postavke → Sigurnosna kopija).</p>
       </section>
@@ -41,7 +41,7 @@ export function GuidePage() {
         <h2>3. Unos mjerenja</h2>
         <ul>
           <li><strong>Ručno:</strong> gumb + → SYS, DIA, puls (neobvezno) → Spremi. Datum i vrijeme su trenutačni.</li>
-          <li><strong>Fotografijom:</strong> Početna → Fotografiraj tlakomjer. Snimite zaslon ravno, bez odsjaja. Aplikacija sama pronađe brojke; provjerite ih i potvrdite. Prvi put odaberite ili dodajte svoj tlakomjer, da aplikacija uči njegove znamenke.</li>
+          <li><strong>Fotografijom:</strong> Početna → Fotografiraj tlakomjer. Snimite zaslon ravno, bez odsjaja. Aplikacija sama pronađe brojke; provjerite ih i potvrdite. Prvi put odaberite ili dodajte svoj tlakomjer, da aplikacija uči njegove znamenke. Naučeno se čuva na računu (Postavke → Tlakomjeri prikazuje „☁ spremljeno na račun”) i vrijedi na svim vašim uređajima.</li>
           <li>Prije mjerenja: 5 minuta odmora, sjedeći, leđa oslonjena, stopala na podu, ruka u visini srca, bez razgovora.</li>
         </ul>
       </section>
