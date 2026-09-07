@@ -28,7 +28,7 @@ export function preprocess(src: HTMLCanvasElement, opts: { threshold?: boolean; 
 }
 
 /** Ista predobrada nad sivom slikom (bez canvasa) – koristi se i u Node ispitnom alatu. */
-export function preprocessGray(gray: Uint8ClampedArray, w: number, h: number, opts: { threshold?: boolean; adaptive?: boolean; closingWindow?: number } = {}): { gray: Uint8ClampedArray; inverted: boolean; contrast: number } {
+export function preprocessGray(gray: Uint8ClampedArray, w: number, h: number, opts: { threshold?: boolean; adaptive?: boolean; closingWindow?: number; relative?: boolean } = {}): { gray: Uint8ClampedArray; inverted: boolean; contrast: number } {
   // median 3×3 protiv šuma
   const med = new Uint8ClampedArray(gray);
   const win = new Array<number>(9);
@@ -51,14 +51,20 @@ export function preprocessGray(gray: Uint8ClampedArray, w: number, h: number, op
   // Inverzija samo za zaslone sa svijetlim znamenkama na crnoj podlozi (pozadinski osvijetljeni):
   // sirova srednja svjetlina prije rastezanja je tada vrlo niska. Tamni LCD s još tamnijim znamenkama
   // (npr. Beurer BM38, srednja ~100) ostaje neinvertiran.
+  // Uz to se traži da svijetli rep histograma (znamenke svjetlije od podloge) bude jači od tamnog repa:
+  // tamni LCD u sjeni (srednja < 60) s još tamnijim znamenkama ima jači tamni rep i ne invertira se.
   let rawSum = 0;
   for (const v of gray) rawSum += v;
-  const inverted = rawSum / gray.length < 60;
+  const rawHist = new Uint32Array(256);
+  for (const v of gray) rawHist[v]++;
+  const pct = (q: number) => { let a = 0; for (let i = 0; i < 256; i++) { a += rawHist[i]; if (a >= total * q) return i; } return 255; };
+  const p2 = pct(0.02), p50 = pct(0.5), p98 = pct(0.98);
+  const inverted = rawSum / gray.length < 60 && (p98 - p50) > (p50 - p2);
   if (inverted) for (let i = 0; i < med.length; i++) med[i] = 255 - med[i];
   let out: Uint8ClampedArray<ArrayBuffer> = med;
   if (opts.adaptive) {
     // prozor ≈ 35 % visine zone: veći od debljine segmenta, manji od promjene osvjetljenja
-    out = sauvola(med, w, h, opts.closingWindow ?? Math.max(9, Math.round(h * ADAPTIVE_WIN_FRAC) | 1), 0);
+    out = sauvola(med, w, h, opts.closingWindow ?? Math.max(9, Math.round(h * ADAPTIVE_WIN_FRAC) | 1), !!opts.relative);
   } else if (opts.threshold) {
     const t = otsu(med);
     out = new Uint8ClampedArray(med.length);
@@ -73,12 +79,14 @@ export function preprocessGray(gray: Uint8ClampedArray, w: number, h: number, op
  * vraća gotovo netaknutu; binarizira se razlika pozadina − piksel. Otporno na odsjaj i nejednako
  * osvjetljenje LCD zaslona, za razliku od globalnog praga.
  */
-export function sauvola(gray: Uint8ClampedArray, w: number, h: number, win: number, _k: number): Uint8ClampedArray<ArrayBuffer> {
-  void _k;
+export function sauvola(gray: Uint8ClampedArray, w: number, h: number, win: number, relative = false): Uint8ClampedArray<ArrayBuffer> {
   const r = Math.max(2, win >> 1);
   const bg = erode(dilate(gray, w, h, r), w, h, r);
   const diff = new Uint8ClampedArray(w * h);
-  for (let i = 0; i < diff.length; i++) diff[i] = Math.max(0, bg[i] - gray[i]);
+  // Relativni (Weberov) kontrast: razlika podijeljena lokalnom pozadinom. Znamenke u tamnijem dijelu
+  // zaslona (sjena, gradijent osvjetljenja) imaju manju apsolutnu razliku, ali sličan relativni kontrast,
+  // pa ih jedan prag hvata jednako kao one u svijetlom dijelu.
+  for (let i = 0; i < diff.length; i++) diff[i] = relative ? Math.min(255, (Math.max(0, bg[i] - gray[i]) * 255) / Math.max(24, bg[i])) : Math.max(0, bg[i] - gray[i]);
   // prag vezan uz kontrast najjačih poteza (98. percentil razlike), a ne uz Otsu koji na
   // blago neravnoj pozadini pada prenisko i pretvara okolinu znamenki u mrlju
   const hist = new Uint32Array(256);

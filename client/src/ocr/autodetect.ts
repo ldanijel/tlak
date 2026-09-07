@@ -72,20 +72,56 @@ export function autoDetect(gray: Uint8ClampedArray, w: number, h: number, debug?
   const g = scale < 1 ? scaleGray(gray, w, h, sw, sh) : gray;
   // više mjerila prozora zatvaranja (debljina segmenta ovisi o udaljenosti fotografiranja); prvi potpun rezultat pobjeđuje
   let best: AutoDetectResult | null = null;
+  const frames: Box[] = [];
   for (const frac of [0.06, 0.09, 0.04]) {
-    const r = detectAt(g, sw, sh, frac, debug);
+    const r = detectAt(g, sw, sh, frac, debug, frames);
     if (r && (!best || r.rows > best.rows)) best = r;
     if (best && best.rows === 3) break;
   }
-  return best;
+  if (best && best.rows === 3) return clip(best);
+  // Drugi pokušaj: unutar okvira zaslona. Na cijeloj fotografiji prag tinte određuju najtamniji dijelovi
+  // (crijevo, sjene), pa sivi LCD sa znamenkama slabijeg kontrasta ispadne razlomljen, a rub zaslona
+  // se spoji sa znamenkama. Velika šuplja komponenta (okvir zaslona) zato se obrađuje iznutra, s vlastitim pragom.
+  const seen: Box[] = [];
+  const uniq = frames.filter((f) => { const dup = seen.some((s) => Math.abs(s.x0 - f.x0) < sw * 0.03 && Math.abs(s.y0 - f.y0) < sh * 0.03 && Math.abs(s.x1 - f.x1) < sw * 0.03 && Math.abs(s.y1 - f.y1) < sh * 0.03); if (!dup) seen.push(f); return !dup; })
+    .sort((a, b) => (b.x1 - b.x0) * (b.y1 - b.y0) - (a.x1 - a.x0) * (a.y1 - a.y0)).slice(0, 3);
+  for (const f of uniq) {
+    const inset = Math.round(Math.min(f.x1 - f.x0, f.y1 - f.y0) * 0.03) + 2;
+    const cx0 = f.x0 + inset, cy0 = f.y0 + inset, cx1 = f.x1 - inset, cy1 = f.y1 - inset;
+    const cw = cx1 - cx0 + 1, ch = cy1 - cy0 + 1;
+    if (cw < sw * 0.1 || ch < sh * 0.1) continue;
+    const crop = new Uint8ClampedArray(cw * ch);
+    for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) crop[y * cw + x] = g[(cy0 + y) * sw + cx0 + x];
+    for (const frac of [0.08, 0.12, 0.05]) {
+      const r = detectAt(crop, cw, ch, frac, debug ? (info) => debug({ frame: [f.x0, f.y0, f.x1, f.y1], ...(info as object) }) : undefined, undefined, true);
+      if (!r) continue;
+      const mapped: AutoDetectResult = { ...r, rect: { x: (cx0 + r.rect.x * cw) / sw, y: (cy0 + r.rect.y * ch) / sh, w: (r.rect.w * cw) / sw, h: (r.rect.h * ch) / sh } };
+      if (!best || mapped.rows > best.rows) best = mapped;
+      if (best.rows === 3) return clip(best);
+    }
+  }
+  return best && clip(best);
 }
 
-function detectAt(g: Uint8ClampedArray, sw: number, sh: number, winFrac: number, debug?: (info: unknown) => void): AutoDetectResult | null {
-  const bin = preprocessGray(g, sw, sh, { adaptive: true, closingWindow: Math.max(9, Math.round(sh * winFrac) | 1) }).gray;
+/** Obrezivanje okvira na granice slike (udjeli 0–1). */
+function clip(r: AutoDetectResult): AutoDetectResult {
+  const x0 = Math.max(0, r.rect.x), y0 = Math.max(0, r.rect.y), x1 = Math.min(1, r.rect.x + r.rect.w), y1 = Math.min(1, r.rect.y + r.rect.h);
+  // horizontale su udjeli visine okvira; pri obrezivanju se preračunaju
+  const d = r.dividers.map((v) => (r.rect.y + v * r.rect.h - y0) / (y1 - y0)) as [number, number];
+  return { ...r, rect: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, dividers: d };
+}
+
+function detectAt(g: Uint8ClampedArray, sw: number, sh: number, winFrac: number, debug?: (info: unknown) => void, frames?: Box[], relative = false): AutoDetectResult | null {
+  const bin = preprocessGray(g, sw, sh, { adaptive: true, closingWindow: Math.max(9, Math.round(sh * winFrac) | 1), relative }).gray;
   const ink = inkFromGray(bin, 128);
   // blaga dilatacija spaja segmente iste znamenke koji se ne dodiruju u kutovima
   const joined = dilateInk(ink, sw, sh, Math.max(1, Math.round(sh * 0.005)));
   const comps = connectedComponents(joined, sw, sh, Math.round(sh * sh * 0.0002));
+  // kandidati za okvir zaslona: velike šuplje komponente (rub LCD-a, eventualno spojen sa znamenkama)
+  if (frames) for (const b of comps) {
+    const bw = b.x1 - b.x0 + 1, bh = b.y1 - b.y0 + 1, fill = b.area / (bw * bh);
+    if (bw >= sw * 0.2 && bh >= sh * 0.15 && bw <= sw * 0.97 && bh <= sh * 0.97 && fill <= 0.5) frames.push(b);
+  }
   // komponente koje mogu biti (dio) znamenke: ne prevelike i ne sitne
   // znamenke mogu biti i vrlo velike (tijesan izrez ili blizu snimljeno): do 45 % visine
   const parts = comps.filter((b) => { const bw = b.x1 - b.x0 + 1, bh = b.y1 - b.y0 + 1; return bh >= sh * 0.012 && bh <= sh * 0.45 && bw <= sw * 0.5; });
@@ -171,7 +207,8 @@ function detectAt(g: Uint8ClampedArray, sw: number, sh: number, winFrac: number,
   // ako red pulsa nije nađen (manje znamenke), okvir se produžuje ispod DIA-e za otprilike jedan red
   const y0 = best.s.y0, y1 = best.p ? best.p.y1 : Math.min(sh - 1, best.d.y1 + best.d.height * 1.25);
   const mh = best.s.height * 0.35, mw = (x1 - x0) * 0.12;
-  const rect = { x: Math.max(0, x0 - mw) / sw, y: Math.max(0, y0 - mh) / sh, w: Math.min(sw, x1 + mw) / sw, h: Math.min(sh, y1 + mh) / sh };
+  // okvir s rubom smije prijeći granice ove slike (kad se radi unutar okvira zaslona); obrezuje ga pozivatelj
+  const rect = { x: (x0 - mw) / sw, y: (y0 - mh) / sh, w: (x1 + mw) / sw, h: (y1 + mh) / sh };
   rect.w -= rect.x; rect.h -= rect.y;
   const mid = (a: RowRead, b: RowRead) => ((a.y1 + b.y0) / 2 / sh - rect.y) / rect.h;
   const d1 = mid(best.s, best.d);

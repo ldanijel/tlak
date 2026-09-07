@@ -137,24 +137,28 @@ export function segmentDigits(inkIn: Uint8Array, w: number, h: number): Glyph[] 
   }
   // kose znamenke koje se u projekciji dodiruju (npr. „1” uz „2”): preširok glif dijeli se na
   // stupcu s najmanje tinte u središnjem dijelu, ako je ondje projekcija gotovo prazna
+  // (ponavlja se dok ima što dijeliti: tri kose znamenke mogu se spojiti u jedan niz)
   const split: typeof boxes = [];
-  for (const b of boxes) {
+  const queue: (typeof boxes[number] & { depth?: number })[] = boxes.slice();
+  while (queue.length) {
+    const { depth = 0, ...b } = queue.shift()!;
     const gw = b.x1 - b.x0 + 1, gh = b.y1 - b.y0 + 1;
-    if (gw / gh > 0.72 && gw > 8) {
+    // već odvojeni komad dijeli se dalje samo ako je i dalje očito preširok za jednu znamenku
+    if (gw / gh > (depth ? 0.8 : 0.72) && gw > 8) {
       let bestX = -1, bestV = Infinity, maxV = 0;
       const prof = new Uint16Array(gw);
       for (let x = b.x0; x <= b.x1; x++) { let n = 0; for (let y = b.y0; y <= b.y1; y++) n += ink[y * w + x]; prof[x - b.x0] = n; if (n > maxV) maxV = n; }
       for (let x = Math.round(gw * 0.15); x <= Math.round(gw * 0.85); x++) if (prof[x] < bestV) { bestV = prof[x]; bestX = x; }
       if (bestX > 0 && bestV <= maxV * 0.25) {
         const l = rowExtent(b.x0, b.x0 + bestX - 1), r = rowExtent(b.x0 + bestX + 1, b.x1);
-        if (l) split.push({ x0: b.x0, x1: b.x0 + bestX - 1, y0: l[0], y1: l[1] });
-        if (r) split.push({ x0: b.x0 + bestX + 1, x1: b.x1, y0: r[0], y1: r[1] });
+        if (l) queue.unshift({ x0: b.x0, x1: b.x0 + bestX - 1, y0: l[0], y1: l[1], depth: depth + 1 });
+        if (r) queue.splice(l ? 1 : 0, 0, { x0: b.x0 + bestX + 1, x1: b.x1, y0: r[0], y1: r[1], depth: depth + 1 });
         continue;
       }
     }
     split.push(b);
   }
-  boxes = split;
+  boxes = split.sort((a, b) => a.x0 - b.x0);
   // kose znamenke koje se preklapaju u projekciji („1” uz „2”): znamenke u istom redu jednake su
   // širine, pa se preširok glif reže zdesna na referentnu širinu ostalih znamenki
   const normal = boxes.filter((b) => { const a = (b.x1 - b.x0 + 1) / (b.y1 - b.y0 + 1); return a >= 0.42 && a <= 0.72; }).map((b) => b.x1 - b.x0 + 1).sort((a, b) => a - b);
@@ -174,6 +178,30 @@ export function segmentDigits(inkIn: Uint8Array, w: number, h: number): Glyph[] 
       cut.push(b);
     }
     boxes = cut.sort((a, b) => a.x0 - b.x0);
+    // „1” prilijepljena uz iduću znamenku (zamućena slika, kosi font): glif tek nešto širi od referentne
+    // širine, s uskim visokim stupom tinte na lijevom rubu i udolinom u profilu iza njega
+    const glued: typeof boxes = [];
+    for (const b of boxes) {
+      const gw = b.x1 - b.x0 + 1, gh = b.y1 - b.y0 + 1;
+      if (gw > refW * 1.04 && gw < refW * 1.6 && gw > 10) {
+        const prof = new Uint16Array(gw);
+        let maxV = 0;
+        for (let x = b.x0; x <= b.x1; x++) { let n = 0; for (let y = b.y0; y <= b.y1; y++) n += ink[y * w + x]; prof[x - b.x0] = n; if (n > maxV) maxV = n; }
+        let vx = -1, vv = Infinity;
+        for (let x = Math.round(gw * 0.12); x <= Math.round(gw * 0.45); x++) if (prof[x] < vv) { vv = prof[x]; vx = x; }
+        if (vx > 0 && vv <= maxV * 0.45) {
+          let peak = 0; for (let x = 0; x < vx; x++) peak = Math.max(peak, prof[x]);
+          const l = rowExtent(b.x0, b.x0 + vx - 1), r = rowExtent(b.x0 + vx + 1, b.x1);
+          if (peak >= gh * 0.75 && l && r && (l[1] - l[0] + 1) >= gh * 0.75 && (r[1] - r[0] + 1) >= gh * 0.75) {
+            glued.push({ x0: b.x0, x1: b.x0 + vx - 1, y0: l[0], y1: l[1] });
+            glued.push({ x0: b.x0 + vx + 1, x1: b.x1, y0: r[0], y1: r[1] });
+            continue;
+          }
+        }
+      }
+      glued.push(b);
+    }
+    boxes = glued;
   }
   const maxH = Math.max(0, ...boxes.map((b) => b.y1 - b.y0 + 1));
   return boxes

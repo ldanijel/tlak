@@ -142,16 +142,18 @@ function snapDividers(display: HTMLCanvasElement, dividers: [number, number]): [
 }
 
 /** Odreže svijetli rub kućišta ako ga je korisnik uhvatio okvirom; vraća samo LCD. */
-function trimDisplay(display: HTMLCanvasElement): HTMLCanvasElement {
+function trimDisplay(display: HTMLCanvasElement, dividers: [number, number]): { canvas: HTMLCanvasElement; dividers: [number, number] } {
   const g = grayOf(display);
   const t = trimBezel(g, display.width, display.height);
   const w = t.x1 - t.x0 + 1, h = t.y1 - t.y0 + 1;
-  if (w < display.width * 0.5 || h < display.height * 0.5) return display;
-  if (t.x0 === 0 && t.y0 === 0 && w === display.width && h === display.height) return display;
+  if (w < display.width * 0.5 || h < display.height * 0.5) return { canvas: display, dividers };
+  if (t.x0 === 0 && t.y0 === 0 && w === display.width && h === display.height) return { canvas: display, dividers };
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
   c.getContext('2d')!.drawImage(display, t.x0, t.y0, w, h, 0, 0, w, h);
-  return c;
+  // horizontale su udjeli visine izvornog izreza: nakon rezanja ruba preračunaju se na novu visinu
+  const map = (d: number) => Math.min(0.98, Math.max(0.02, (d * display.height - t.y0) / h));
+  return { canvas: c, dividers: [map(dividers[0]), map(dividers[1])] };
 }
 
 /**
@@ -195,8 +197,9 @@ function scaleNearest(src: HTMLCanvasElement, factor: number): HTMLCanvasElement
  */
 export async function recognizeBands(displayIn: HTMLCanvasElement, dividersIn: [number, number], onProgress?: (stage: string, p: number) => void, model: OcrModelData = emptyModel()): Promise<OcrResult> {
   onProgress?.('Učitavanje OCR modela', 0.05);
-  const display = trimDisplay(displayIn);
-  const dividers = snapDividers(display, dividersIn);
+  const trimmed = trimDisplay(displayIn, dividersIn);
+  const display = trimmed.canvas;
+  const dividers = snapDividers(display, trimmed.dividers);
   const workers: { name: string; w: Worker }[] = [];
   try { workers.push({ name: 'letsgodigital', w: await getDigitWorker((p) => onProgress?.('Učitavanje modela znamenki', 0.05 + p * 0.25)) }); } catch (e) { console.warn(e); }
   try { const w = await getTextWorker(); await w.setParameters({ tessedit_char_whitelist: '0123456789', tessedit_pageseg_mode: PSM.SINGLE_LINE }); workers.push({ name: 'eng', w }); } catch (e) { console.warn(e); }
@@ -265,6 +268,8 @@ export async function recognizeBands(displayIn: HTMLCanvasElement, dividersIn: [
         if (score(g) > score(best)) { best = g; engineUsed = name; bestVariant = `${name}/${VARIANT_NAMES[vi]}`; }
       }
     }
+    // Tesseractov pogodak s vrlo niskom pouzdanošću (< 25 %) ne popunjava polje: bolje prazno nego krivo
+    if (best.value !== null && best.confidence < 25) best = { value: null, confidence: best.confidence, reason: `niska pouzdanost (OCR ${best.value})` };
     // dekoder segmenata (bez učenja): siguran je kad su segmenti jasno uključeni/isključeni
     if (seg.value !== null) {
       if (best.value === seg.value) best = { value: seg.value, confidence: Math.max(best.confidence, seg.confidence, 85) };

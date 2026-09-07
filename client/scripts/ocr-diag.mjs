@@ -31,6 +31,7 @@ console.log(`izrez ${W}×${H}, medijan ${medianGray(gray)}, odrezan rub → x ${
   if (w >= W * 0.5 && h >= H * 0.5) {
     const g = new Uint8ClampedArray(w * h);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) g[y * w + x] = gray[(t.y0 + y) * W + t.x0 + x];
+    d.layout.dividers = d.layout.dividers.map((v) => Math.min(0.98, Math.max(0.02, (v * H - t.y0) / h)));
     gray = g; W = w; H = h;
   }
 }

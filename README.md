@@ -142,6 +142,17 @@ createdAt, updatedAt) i ostaje mapljiv na HealthKit/Health Connect.
 - Postavke → O aplikaciji prikazuje stvarnu verziju iz `package.json` (`__APP_VERSION__`), vrijeme izgradnje i verziju
   poslužitelja (`/api/health` vraća `version`), uz gumb „Provjeri ažuriranje”. Nova verzija se i dalje preuzima sama
   (autoUpdate), a provjera se ponavlja svakih sat vremena i pri svakom povratku u aplikaciju.
+- Auto-detekcija u dva prolaza (`autodetect.ts`): ako na cijeloj fotografiji nema tri reda znamenki, velike šuplje
+  komponente (okvir LCD-a) obrađuju se iznutra, s vlastitim pragom i relativnim (Weberovim) kontrastom
+  (`preprocessGray({ relative: true })`), jer na cijeloj fotografiji prag određuju najtamniji dijelovi (crijevo, sjene),
+  a sivi LCD sa znamenkama u sjeni ispadne razlomljen. Okvir s rubom smije prijeći granice unutrašnjosti; obrezuje se
+  na kraju, s preračunom horizontala.
+- Inverzija polariteta samo kad je uz nisku srednju svjetlinu i svijetli rep histograma jači od tamnog: tamni LCD u
+  sjeni (BM38, zona pulsa) s još tamnijim znamenkama više se ne invertira (prije je to zonu pulsa pretvaralo u mrlje).
+- Nakon rezanja svijetlog ruba (`trimDisplay`) horizontale se preračunaju na novu visinu.
+- Segmentacija: dijeljenje preširokog glifa na najpraznijem stupcu ponavlja se (tri kose znamenke spojene u jedan niz),
+  a već odvojeni komad dijeli se dalje samo ako mu je omjer širine i visine > 0,8.
+- Tesseractov pogodak s pouzdanošću < 25 % ne popunjava polje.
 - Dijagnostika OCR-a (verzija 2) uključuje umanjenu cijelu fotografiju, podrijetlo izreza, međurezultate automatskog
   pronalaženja i potpune bitmape naučenih znamenki.
 
