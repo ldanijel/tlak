@@ -4,10 +4,10 @@ import { useStore } from '../store.tsx';
 import { exifDate, loadImage, toCanvas, cropRotate, type Rect } from '../ocr/image.ts';
 import { recognizeBands, warmUpOcr, type OcrResult } from '../ocr/recognize.ts';
 import { autoDetect } from '../ocr/autodetect.ts';
-import { fmtDateTime, fromInputs, toInputDate, toInputTime, currentTimezone } from '../lib/format.ts';
+import { fmtDateTime, fromInputs, isValidInputDate, isValidInputTime, toInputDate, toInputTime, currentTimezone } from '../lib/format.ts';
 import { suggestPeriod } from '../lib/periods.ts';
 import { hasErrors, needsConfirm, validateDraft, type ValidationMessage } from '../lib/validation.ts';
-import { Message, NumberInput, useToast } from '../components/ui.tsx';
+import { Message, NumberInput, useToast, DateInput, TimeInput } from '../components/ui.tsx';
 import { emptyModel, learn, modelReady, sampleCount, type OcrModelData } from '../ocr/learn.ts';
 import type { OcrModel } from '../types.ts';
 import { shareOrDownload, stamp } from '../lib/share.ts';
@@ -201,6 +201,7 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
 
   const measuredAt = fromInputs(date, time).toISOString();
   const onSave = async (next = series) => {
+    if (!isValidInputDate(date) || !isValidInputTime(time)) { setMsgs([{ level: 'error', code: 'datetime', text: 'Datum (DD.MM.GGGG) i vrijeme (HH:MM) moraju biti potpuni.' }]); return; }
     const m = validateDraft({ systolic: sys, diastolic: dia, pulse, measuredAt, period: suggestPeriod(new Date(measuredAt)) }, { existing: data.measurements, targets: data.targets, safety: data.settings.safety, categories: data.settings.categories });
     setMsgs(m);
     if (hasErrors(m)) return;
@@ -414,8 +415,8 @@ export function PhotoPage({ mode }: { mode: 'camera' | 'gallery' }) {
             ))}
           </div>
           <div className="grid2">
-            <div className="field"><label>Datum<input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label></div>
-            <div className="field"><label>Vrijeme<input type="time" value={time} onChange={(e) => setTime(e.target.value)} /></label></div>
+            <div className="field"><label>Datum<DateInput value={date} onChange={(v) => setDate(v)} /></label></div>
+            <div className="field"><label>Vrijeme<TimeInput value={time} onChange={(v) => setTime(v)} /></label></div>
           </div>
           <p className="small">
             Datum i vrijeme: <strong className="tabular">{fmtDateTime(measuredAt)}</strong>{' '}

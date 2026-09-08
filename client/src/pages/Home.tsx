@@ -6,7 +6,7 @@ import { MAIN_RANGES, RANGE_LABEL, RANGE_SHORT, resolveRange, type RangeKey } fr
 import { summarize } from '../lib/stats.ts';
 import { classify, STATUS_LABEL } from '../lib/targets.ts';
 import { PERIOD_LABEL, SOURCE_LABEL } from '../lib/labels.ts';
-import { Badge, Segmented, useLocalStorage } from '../components/ui.tsx';
+import { Badge, Segmented, useLocalStorage, DateInput } from '../components/ui.tsx';
 import { CategoryBar, MinAvgMaxBar } from '../components/charts.tsx';
 import { categorize, categorizeValue, CATEGORY_ICON, CATEGORY_LABEL, categoryRangeText } from '../lib/categories.ts';
 
@@ -65,8 +65,8 @@ export function HomePage() {
         <Segmented value={rangeKey} onChange={setRangeKey} short label="Razdoblje" options={RANGES.map((r) => ({ value: r, label: RANGE_SHORT[r], title: RANGE_LABEL[r] }))} />
         {rangeKey === 'custom' && (
           <div className="grid2">
-            <div className="field"><label>Od<input type="date" value={custom.from} onChange={(e) => setCustom({ ...custom, from: e.target.value })} /></label></div>
-            <div className="field"><label>Do<input type="date" value={custom.to} onChange={(e) => setCustom({ ...custom, to: e.target.value })} /></label></div>
+            <div className="field"><label>Od<DateInput value={custom.from} onChange={(v) => setCustom({ ...custom, from: v })} /></label></div>
+            <div className="field"><label>Do<DateInput value={custom.to} onChange={(v) => setCustom({ ...custom, to: v })} /></label></div>
           </div>
         )}
         {s.count === 0 ? <p className="muted">Nema mjerenja u odabranom razdoblju.</p> : (
@@ -87,10 +87,10 @@ export function HomePage() {
             </div>
             <div className="small muted">
               Min–max: SYS {fmtNum(s.sys.min)}–{fmtNum(s.sys.max)}, DIA {fmtNum(s.dia.min)}–{fmtNum(s.dia.max)}, puls {fmtNum(s.pulse.min)}–{fmtNum(s.pulse.max)}.
-              {s.delta ? ` Promjena prema prethodnom razdoblju: SYS ${fmtDelta(s.delta.sys, 1)}, DIA ${fmtDelta(s.delta.dia, 1)}, puls ${fmtDelta(s.delta.pulse, 1)}.` : ' Nema usporedivog prethodnog razdoblja.'}
+              {s.delta ? ` Promjena prema prethodnom razdoblju: SYS ${fmtDelta(s.delta.sys)}, DIA ${fmtDelta(s.delta.dia)}, puls ${fmtDelta(s.delta.pulse)}.` : ' Nema usporedivog prethodnog razdoblja.'}
             </div>
             {s.morningSys.avg !== null && s.eveningSys.avg !== null && (
-              <div className="small muted">Jutro − večer: SYS {fmtDelta(s.morningSys.avg - s.eveningSys.avg, 1)}, DIA {fmtDelta(s.morningDia.avg! - s.eveningDia.avg!, 1)}.</div>
+              <div className="small muted">Jutro − večer: SYS {fmtDelta(s.morningSys.avg - s.eveningSys.avg)}, DIA {fmtDelta(s.morningDia.avg! - s.eveningDia.avg!)}.</div>
             )}
           </>
         )}

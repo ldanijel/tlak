@@ -7,7 +7,7 @@ import { toCsv } from '../lib/csv.ts';
 import { makeBackup } from '../lib/backup.ts';
 import { shareOrDownload, stamp } from '../lib/share.ts';
 import { PERIOD_LABEL, SOURCE_LABEL, TIMING_LABEL, EVENT_LABEL } from '../lib/labels.ts';
-import { Segmented, useToast } from '../components/ui.tsx';
+import { Segmented, useToast, DateInput } from '../components/ui.tsx';
 import { CategoryBar, TimeChart } from '../components/charts.tsx';
 import { categorize, CATEGORY_SHORT } from '../lib/categories.ts';
 
@@ -42,8 +42,8 @@ export function ReportPage() {
           <Segmented value={rangeKey} onChange={setRangeKey} short label="Razdoblje" options={RANGES.map((r) => ({ value: r, label: RANGE_SHORT[r], title: RANGE_LABEL[r] }))} />
           {rangeKey === 'custom' && (
             <div className="grid2">
-              <div className="field"><label>Od<input type="date" value={custom.from} onChange={(e) => setCustom({ ...custom, from: e.target.value })} /></label></div>
-              <div className="field"><label>Do<input type="date" value={custom.to} onChange={(e) => setCustom({ ...custom, to: e.target.value })} /></label></div>
+              <div className="field"><label>Od<DateInput value={custom.from} onChange={(v) => setCustom({ ...custom, from: v })} /></label></div>
+              <div className="field"><label>Do<DateInput value={custom.to} onChange={(v) => setCustom({ ...custom, to: v })} /></label></div>
             </div>
           )}
           <div className="chips" style={{ marginTop: 10 }}>
@@ -67,11 +67,11 @@ export function ReportPage() {
           <p className="small">Razdoblje: <strong>{fmtDate(range.from)} – {fmtDate(range.to)}</strong> · izrađeno {fmtDateTime(new Date())} · izvor: aplikacija Tlak (vlastita mjerenja korisnika)</p>
           <table className="tbl"><tbody>
             <tr><th>Broj mjerenja / dana s mjerenjem</th><td className="n">{s.count}{s.countAll !== s.count ? ` (+${s.countAll - s.count} isključeno iz prosjeka)` : ''} / {s.days}</td></tr>
-            <tr><th>SYS prosjek (min–max) – izračun</th><td className="n">{fmtNum(s.sys.avg, 1)} ({fmtNum(s.sys.min)}–{fmtNum(s.sys.max)}) mmHg</td></tr>
-            <tr><th>DIA prosjek (min–max) – izračun</th><td className="n">{fmtNum(s.dia.avg, 1)} ({fmtNum(s.dia.min)}–{fmtNum(s.dia.max)}) mmHg</td></tr>
-            <tr><th>Puls prosjek (min–max) – izračun</th><td className="n">{fmtNum(s.pulse.avg, 1)} ({fmtNum(s.pulse.min)}–{fmtNum(s.pulse.max)}) /min</td></tr>
-            <tr><th>Jutarnji prosjek (n)</th><td className="n">{fmtNum(s.morningSys.avg, 1)}/{fmtNum(s.morningDia.avg, 1)} ({s.morningSys.n})</td></tr>
-            <tr><th>Večernji prosjek (n)</th><td className="n">{fmtNum(s.eveningSys.avg, 1)}/{fmtNum(s.eveningDia.avg, 1)} ({s.eveningSys.n})</td></tr>
+            <tr><th>SYS prosjek (min–max) – izračun</th><td className="n">{fmtNum(s.sys.avg)} ({fmtNum(s.sys.min)}–{fmtNum(s.sys.max)}) mmHg</td></tr>
+            <tr><th>DIA prosjek (min–max) – izračun</th><td className="n">{fmtNum(s.dia.avg)} ({fmtNum(s.dia.min)}–{fmtNum(s.dia.max)}) mmHg</td></tr>
+            <tr><th>Puls prosjek (min–max) – izračun</th><td className="n">{fmtNum(s.pulse.avg)} ({fmtNum(s.pulse.min)}–{fmtNum(s.pulse.max)}) /min</td></tr>
+            <tr><th>Jutarnji prosjek (n)</th><td className="n">{fmtNum(s.morningSys.avg)}/{fmtNum(s.morningDia.avg)} ({s.morningSys.n})</td></tr>
+            <tr><th>Večernji prosjek (n)</th><td className="n">{fmtNum(s.eveningSys.avg)}/{fmtNum(s.eveningDia.avg)} ({s.eveningSys.n})</td></tr>
             <tr><th>Udio unutar osobnog cilja</th><td className="n">{s.inTargetShare === null ? 'cilj nije postavljen' : `${Math.round(s.inTargetShare * 100)} %`}</td></tr>
           </tbody></table>
           <p className="small" style={{ marginTop: 10 }}>Raspodjela po ESC kategorijama kućnog tlaka (nepovišeni &lt; {data.settings.categories.elevatedSys}/{data.settings.categories.elevatedDia}, povišeni {data.settings.categories.elevatedSys}–{data.settings.categories.highSys - 1}/{data.settings.categories.elevatedDia}–{data.settings.categories.highDia - 1}, visoki {data.settings.categories.highSys}–{data.settings.categories.veryHighSys - 1}/{data.settings.categories.highDia}–{data.settings.categories.veryHighDia - 1}, vrlo visoki ≥ {data.settings.categories.veryHighSys}/{data.settings.categories.veryHighDia}; lošija vrijednost određuje kategoriju):</p>

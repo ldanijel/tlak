@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useStore } from '../store.tsx';
 import type { Target, TargetBounds } from '../types.ts';
 import { fmtDate, toInputDate } from '../lib/format.ts';
-import { Confirm, Field, useToast } from '../components/ui.tsx';
+import { Confirm, Field, useToast, DateInput } from '../components/ui.tsx';
 
 const empty = (): TargetBounds => ({ sysMin: 100, sysMax: 135, diaMin: 60, diaMax: 85, pulseMin: null, pulseMax: null });
 
@@ -45,7 +45,7 @@ export function TargetsPage() {
       {editing && (
         <form className="card" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
           <h3>{editing.id ? 'Uredi cilj' : 'Novi cilj'}</h3>
-          <Field label="Vrijedi od"><input type="date" value={editing.effectiveFrom} onChange={(e) => setEditing({ ...editing, effectiveFrom: e.target.value })} required /></Field>
+          <Field label="Vrijedi od"><DateInput value={editing.effectiveFrom || ''} onChange={(v) => setEditing({ ...editing, effectiveFrom: v })} required /></Field>
           <BoundsEditor b={editing as TargetBounds} onChange={(b) => setEditing({ ...editing, ...b })} withPulse />
           <label className="row small"><input type="checkbox" checked={!!editing.morning} onChange={(e) => setEditing({ ...editing, morning: e.target.checked ? { ...(editing as TargetBounds) } : null })} /> Različite granice za jutro</label>
           {editing.morning && <BoundsEditor b={editing.morning} onChange={(b) => setEditing({ ...editing, morning: b })} />}

@@ -4,7 +4,7 @@ import { useStore } from '../store.tsx';
 import { fmtNum, fmtDelta, toInputDate } from '../lib/format.ts';
 import { MAIN_RANGES, RANGE_LABEL, RANGE_SHORT, resolveRange, type RangeKey } from '../lib/periods.ts';
 import { summarize, groupSessions, analyzed } from '../lib/stats.ts';
-import { Badge, Segmented, useLocalStorage } from '../components/ui.tsx';
+import { Badge, Segmented, useLocalStorage, DateInput } from '../components/ui.tsx';
 import { CategoryBar, TimeChart } from '../components/charts.tsx';
 
 const RANGES: RangeKey[] = [...MAIN_RANGES, 'all', 'custom'];
@@ -25,8 +25,8 @@ export function AnalysisPage() {
       <Segmented value={rangeKey} onChange={setRangeKey} short label="Razdoblje" options={RANGES.map((r) => ({ value: r, label: RANGE_SHORT[r], title: RANGE_LABEL[r] }))} />
       {rangeKey === 'custom' && (
         <div className="grid2">
-          <div className="field"><label>Od<input type="date" value={custom.from} onChange={(e) => setCustom({ ...custom, from: e.target.value })} /></label></div>
-          <div className="field"><label>Do<input type="date" value={custom.to} onChange={(e) => setCustom({ ...custom, to: e.target.value })} /></label></div>
+          <div className="field"><label>Od<DateInput value={custom.from} onChange={(v) => setCustom({ ...custom, from: v })} /></label></div>
+          <div className="field"><label>Do<DateInput value={custom.to} onChange={(v) => setCustom({ ...custom, to: v })} /></label></div>
         </div>
       )}
 
@@ -44,8 +44,8 @@ export function AnalysisPage() {
         <h2>Jutro i večer <Badge kind="calc">izračun</Badge></h2>
         {s.morningSys.n === 0 && s.eveningSys.n === 0 ? <p className="muted">Nema jutarnjih ni večernjih mjerenja u razdoblju.</p> : (
           <table className="tbl"><thead><tr><th></th><th className="n">Jutro</th><th className="n">Večer</th><th className="n">Razlika</th></tr></thead><tbody>
-            <tr><th>SYS prosjek</th><td className="n">{fmtNum(s.morningSys.avg, 1)}</td><td className="n">{fmtNum(s.eveningSys.avg, 1)}</td><td className="n">{s.morningSys.avg !== null && s.eveningSys.avg !== null ? fmtDelta(s.morningSys.avg - s.eveningSys.avg, 1) : '–'}</td></tr>
-            <tr><th>DIA prosjek</th><td className="n">{fmtNum(s.morningDia.avg, 1)}</td><td className="n">{fmtNum(s.eveningDia.avg, 1)}</td><td className="n">{s.morningDia.avg !== null && s.eveningDia.avg !== null ? fmtDelta(s.morningDia.avg - s.eveningDia.avg, 1) : '–'}</td></tr>
+            <tr><th>SYS prosjek</th><td className="n">{fmtNum(s.morningSys.avg)}</td><td className="n">{fmtNum(s.eveningSys.avg)}</td><td className="n">{s.morningSys.avg !== null && s.eveningSys.avg !== null ? fmtDelta(s.morningSys.avg - s.eveningSys.avg) : '–'}</td></tr>
+            <tr><th>DIA prosjek</th><td className="n">{fmtNum(s.morningDia.avg)}</td><td className="n">{fmtNum(s.eveningDia.avg)}</td><td className="n">{s.morningDia.avg !== null && s.eveningDia.avg !== null ? fmtDelta(s.morningDia.avg - s.eveningDia.avg) : '–'}</td></tr>
             <tr><th>Broj mjerenja</th><td className="n">{s.morningSys.n}</td><td className="n">{s.eveningSys.n}</td><td></td></tr>
           </tbody></table>
         )}
@@ -67,8 +67,8 @@ export function AnalysisPage() {
           <div className="stat"><div className="k">Mjerenja / dana</div><div className="v tabular">{s.count} / {s.days}</div></div>
           <div className="stat"><div className="k">Unutar cilja</div><div className="v tabular">{s.inTargetShare === null ? '–' : `${Math.round(s.inTargetShare * 100)} %`}</div></div>
         </div>
-        {pp && <p className="small">Izvedeni pokazatelji <Badge kind="calc">izračun</Badge>: prosječni pulsni tlak {fmtNum(pp.pp, 1)} mmHg · prosječni srednji arterijski tlak {fmtNum(pp.map, 1)} mmHg.</p>}
-        {s.delta && <p className="small muted">Promjena prema prethodnom razdoblju: SYS {fmtDelta(s.delta.sys, 1)}, DIA {fmtDelta(s.delta.dia, 1)}, puls {fmtDelta(s.delta.pulse, 1)}.</p>}
+        {pp && <p className="small">Izvedeni pokazatelji <Badge kind="calc">izračun</Badge>: prosječni pulsni tlak {fmtNum(pp.pp)} mmHg · prosječni srednji arterijski tlak {fmtNum(pp.map)} mmHg.</p>}
+        {s.delta && <p className="small muted">Promjena prema prethodnom razdoblju: SYS {fmtDelta(s.delta.sys)}, DIA {fmtDelta(s.delta.dia)}, puls {fmtDelta(s.delta.pulse)}.</p>}
       </section>
 
       <section className="card">

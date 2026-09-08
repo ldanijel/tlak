@@ -284,3 +284,6 @@ kbd { font-size: .8em; padding: 1px 5px; border: 1px solid var(--border); border
   a { color: inherit; text-decoration: none; }
   @page { size: A4; margin: 14mm; }
 }
+
+/* Datum/vrijeme kao tekst (DD.MM.GGGG, HH:MM): neispravan unos crveno */
+.field input.invalid, input.invalid { border-color: var(--critical); outline-color: var(--critical); }

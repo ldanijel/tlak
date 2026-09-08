@@ -186,6 +186,15 @@ createdAt, updatedAt) i ostaje mapljiv na HealthKit/Health Connect.
 - Dijagnostika OCR-a (verzija 2) uključuje umanjenu cijelu fotografiju, podrijetlo izreza, međurezultate automatskog
   pronalaženja i potpune bitmape naučenih znamenki.
 
+## Verzija 1.6
+
+- Datum i vrijeme unose se kao tekst u hrvatskom obliku, neovisno o jeziku uređaja: `DateInput` (DD.MM.GGGG) i
+  `TimeInput` (HH:MM, 24-satno) u `components/ui.tsx` zamjenjuju sistemska polja `type="date"`/`type="time"`, koja na
+  iPhoneu s engleskim postavkama prikazuju MM/DD/YYYY i AM/PM. Točke i dvotočka umeću se same pri tipkanju znamenki;
+  neispravan unos je crveno označen, a spremanje traži potpun datum i vrijeme. `fromInputs` više ne vraća neispravan
+  `Date` za nepotpun unos (prije je rušilo stranicu tijekom tipkanja).
+- Svi prosjeci (SYS, DIA, puls, jutro/večer, pulsni i srednji arterijski tlak) i razlike prikazuju se kao cijeli brojevi.
+
 ## Pozivni kod i preporučeni hosting (Fly.io)
 
 - `INVITE_CODE` (varijabla okoline ili `fly secrets set INVITE_CODE=…`): kad je postavljen, registracija traži pozivni kod, pa račun

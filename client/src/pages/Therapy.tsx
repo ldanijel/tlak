@@ -4,7 +4,7 @@ import { useStore } from '../store.tsx';
 import type { EventType, HealthEvent, Medication } from '../types.ts';
 import { fmtDate, toInputDate } from '../lib/format.ts';
 import { EVENT_LABEL } from '../lib/labels.ts';
-import { Confirm, Field, useToast } from '../components/ui.tsx';
+import { Confirm, Field, useToast, DateInput } from '../components/ui.tsx';
 
 export function TherapyPage() {
   const { data, save, remove } = useStore();
@@ -43,8 +43,8 @@ export function TherapyPage() {
             <div className="grid2">
               <Field label="Doza"><input value={med.dose || ''} onChange={(e) => setMed({ ...med, dose: e.target.value })} placeholder="npr. 5 mg" /></Field>
               <Field label="Planirano vrijeme"><input value={med.schedule || ''} onChange={(e) => setMed({ ...med, schedule: e.target.value })} placeholder="npr. ujutro 08:00" /></Field>
-              <Field label="Početak"><input type="date" value={med.startDate || ''} onChange={(e) => setMed({ ...med, startDate: e.target.value })} required /></Field>
-              <Field label="Završetak"><input type="date" value={med.endDate || ''} onChange={(e) => setMed({ ...med, endDate: e.target.value || null })} /></Field>
+              <Field label="Početak"><DateInput value={med.startDate || ''} onChange={(v) => setMed({ ...med, startDate: v })} required /></Field>
+              <Field label="Završetak"><DateInput value={med.endDate || ''} onChange={(v) => setMed({ ...med, endDate: v || null })} /></Field>
             </div>
             <Field label="Bilješka (npr. promjena doze)"><input value={med.note || ''} onChange={(e) => setMed({ ...med, note: e.target.value })} /></Field>
             <div className="row"><button type="submit" className="btn primary">Spremi</button><button type="button" className="btn" onClick={() => setMed(null)}>Odustani</button>
@@ -64,7 +64,7 @@ export function TherapyPage() {
         {!ev ? <button type="button" className="btn block" style={{ marginTop: 8 }} onClick={() => setEv({ date: toInputDate(new Date()), type: 'other' })}>+ Dodaj događaj</button> : (
           <form onSubmit={(e) => { e.preventDefault(); void saveEv(); }}>
             <div className="grid2">
-              <Field label="Datum"><input type="date" value={ev.date || ''} onChange={(e) => setEv({ ...ev, date: e.target.value })} required /></Field>
+              <Field label="Datum"><DateInput value={ev.date || ''} onChange={(v) => setEv({ ...ev, date: v })} required /></Field>
               <Field label="Vrsta"><select value={ev.type} onChange={(e) => setEv({ ...ev, type: e.target.value as EventType })}>{(Object.keys(EVENT_LABEL) as EventType[]).map((k) => <option key={k} value={k}>{EVENT_LABEL[k]}</option>)}</select></Field>
             </div>
             <Field label="Naslov (kratko, prikazuje se na grafu)"><input value={ev.title || ''} onChange={(e) => setEv({ ...ev, title: e.target.value })} maxLength={40} /></Field>

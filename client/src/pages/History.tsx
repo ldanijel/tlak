@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Confirm, Field, Segmented, useToast } from '../components/ui.tsx';
+import { Confirm, Field, Segmented, useToast, DateInput } from '../components/ui.tsx';
 import { toInputDate, fromInputs } from '../lib/format.ts';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useStore } from '../store.tsx';
@@ -72,8 +72,8 @@ export function HistoryPage() {
         <Confirm title="Skupno brisanje mjerenja" confirmLabel={`Izbriši ${bulkTargets().length}`} danger onConfirm={() => void doBulk()} onCancel={() => setBulk(null)}>
           <Segmented value={bulk.mode} onChange={(mode) => setBulk({ ...bulk, mode })} wrap label="Opseg" options={[{ value: 'all', label: 'SVE' }, { value: 'from', label: 'SVE OD:' }, { value: 'to', label: 'SVE DO:' }, { value: 'range', label: 'RASPON OD–DO' }]} />
           <div className="grid2">
-            {(bulk.mode === 'from' || bulk.mode === 'range') && <Field label="Od (uključivo)"><input type="date" value={bulk.from} onChange={(e) => setBulk({ ...bulk, from: e.target.value })} /></Field>}
-            {(bulk.mode === 'to' || bulk.mode === 'range') && <Field label="Do (uključivo)"><input type="date" value={bulk.to} onChange={(e) => setBulk({ ...bulk, to: e.target.value })} /></Field>}
+            {(bulk.mode === 'from' || bulk.mode === 'range') && <Field label="Od (uključivo)"><DateInput value={bulk.from} onChange={(v) => setBulk({ ...bulk, from: v })} /></Field>}
+            {(bulk.mode === 'to' || bulk.mode === 'range') && <Field label="Do (uključivo)"><DateInput value={bulk.to} onChange={(v) => setBulk({ ...bulk, to: v })} /></Field>}
           </div>
           <p className="small">Bit će izbrisano <strong>{bulkTargets().length}</strong> od {data.measurements.length} mjerenja. Brisanje se može poništiti gumbom „Vrati” odmah nakon brisanja, a briše se i na svim sinkroniziranim uređajima.</p>
         </Confirm>

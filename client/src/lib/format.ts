@@ -32,10 +32,22 @@ export function toInputDate(iso: string | Date): string {
 export function toInputTime(iso: string | Date): string {
   return fmtTime(iso);
 }
+/** Je li unos datuma (GGGG-MM-DD) potpun i valjan. */
+export function isValidInputDate(date: string): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!m) return false;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return d.getFullYear() === Number(m[1]) && d.getMonth() === Number(m[2]) - 1 && d.getDate() === Number(m[3]);
+}
+/** Je li unos vremena (HH:MM) potpun i valjan. */
+export function isValidInputTime(time: string): boolean { return /^([01]\d|2[0-3]):[0-5]\d$/.test(time); }
+
+/** Datum iz unosa; nepotpun ili neispravan unos (tijekom tipkanja) vraća današnji datum / 00:00 umjesto neispravnog Date. */
 export function fromInputs(date: string, time: string): Date {
-  const [y, m, d] = date.split('-').map(Number);
-  const [hh, mm] = time.split(':').map(Number);
-  return new Date(y, m - 1, d, hh || 0, mm || 0, 0, 0);
+  const now = new Date();
+  const [y, m, d] = isValidInputDate(date) ? date.split('-').map(Number) : [now.getFullYear(), now.getMonth() + 1, now.getDate()];
+  const [hh, mm] = isValidInputTime(time) ? time.split(':').map(Number) : [0, 0];
+  return new Date(y, m - 1, d, hh, mm, 0, 0);
 }
 
 export function fmtNum(n: number | null | undefined, digits = 0): string {

@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useStore } from '../store.tsx';
 import { SYMPTOMS, TAGS, type ArmLocation, type BodyPosition, type MedicationTiming, type Measurement, type Period, type Source } from '../types.ts';
-import { currentTimezone, fromInputs, toInputDate, toInputTime } from '../lib/format.ts';
+import { currentTimezone, fromInputs, isValidInputDate, isValidInputTime, toInputDate, toInputTime } from '../lib/format.ts';
 import { suggestPeriod } from '../lib/periods.ts';
 import { hasErrors, needsConfirm, validateDraft, type ValidationMessage } from '../lib/validation.ts';
 import { ARM_LABEL, PERIOD_LABEL, POSITION_LABEL, TIMING_LABEL } from '../lib/labels.ts';
-import { Chips, Field, Message, NumberInput, Segmented, useToast } from '../components/ui.tsx';
+import { Chips, Field, Message, NumberInput, Segmented, useToast, DateInput, TimeInput } from '../components/ui.tsx';
 import { uid } from '../lib/ids.ts';
 
 /** Predispunjene vrijednosti (npr. iz OCR-a) prenose se kroz location.state. */
@@ -56,6 +56,7 @@ export function NewMeasurementPage() {
   const draftMsgs = () => validateDraft({ systolic: sys, diastolic: dia, pulse, measuredAt, period }, { existing: data.measurements, editingId: editing?.id, targets: data.targets, safety: data.settings.safety, categories: data.settings.categories });
 
   const onSave = async () => {
+    if (!untouched && (!isValidInputDate(date) || !isValidInputTime(time))) { setMsgs([{ level: 'error', code: 'datetime', text: 'Datum (DD.MM.GGGG) i vrijeme (HH:MM) moraju biti potpuni.' }]); return; }
     const m = draftMsgs();
     setMsgs(m);
     if (hasErrors(m)) return;
@@ -119,8 +120,8 @@ export function NewMeasurementPage() {
           <div className={`field bigfield pulse ${lowConf('pulse') ? 'flag' : ''}`}><label>Puls<NumberInput ref={pulseRef} value={pulse} onChange={(v) => { setPulse(v); setMsgs([]); setConfirmed(false); }} onKeyDown={keyNext(saveRef)} enterKeyHint="done" placeholder="–" /></label><span className="unit">otk./min · neobvezno{lowConf('pulse') && ' · provjerite'}</span></div>
         </div>
         <div className="grid2">
-          <Field label="Datum"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} required /></Field>
-          <Field label="Vrijeme"><input type="time" value={time} onChange={(e) => setTime(e.target.value)} required /></Field>
+          <Field label="Datum"><DateInput value={date} onChange={(v) => setDate(v)} required /></Field>
+          <Field label="Vrijeme"><TimeInput value={time} onChange={(v) => setTime(v)} required /></Field>
         </div>
         <Field label="Razdoblje" hint="Predloženo prema vremenu; možete promijeniti.">
           <Segmented value={period} onChange={(v) => { setPeriod(v); setPeriodTouched(true); }} options={(['morning', 'evening', 'other'] as Period[]).map((p) => ({ value: p, label: PERIOD_LABEL[p] }))} />
