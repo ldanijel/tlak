@@ -17,6 +17,7 @@ export interface Summary {
   count: number;
   countAll: number;
   days: number;
+  daysBoth: number; // dani s jutarnjim i večernjim mjerenjem
   sys: MinAvgMax;
   dia: MinAvgMax;
   pulse: MinAvgMax;
@@ -43,6 +44,9 @@ export function summarize(all: Measurement[], range: DateRange, targets: Target[
   const morning = inc.filter((m) => m.period === 'morning');
   const evening = inc.filter((m) => m.period === 'evening');
   const days = new Set(inR.map((m) => localDayKey(m.measuredAt))).size;
+  // dani s barem jednim jutarnjim i jednim večernjim mjerenjem (ESC: najmanje 3, idealno 7 dana prije pregleda)
+  const mDays = new Set(morning.map((m) => localDayKey(m.measuredAt)));
+  const daysBoth = [...new Set(evening.map((m) => localDayKey(m.measuredAt)))].filter((k) => mDays.has(k)).length;
   const withTarget = inc.map((m) => classify(m, targets)).filter((s) => s !== 'none');
   const inTarget = withTarget.filter((s) => s === 'in').length;
   const cur = {
@@ -63,6 +67,7 @@ export function summarize(all: Measurement[], range: DateRange, targets: Target[
     categories,
     countAll: inR.length,
     days,
+    daysBoth,
     ...cur,
     morningSys: minAvgMax(morning.map((m) => m.systolic)),
     morningDia: minAvgMax(morning.map((m) => m.diastolic)),

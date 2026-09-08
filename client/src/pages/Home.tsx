@@ -1,14 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../store.tsx';
-import { fmtDateTime, fmtNum, fmtDelta, fmtRelative, toInputDate } from '../lib/format.ts';
+import { fmtDateTime, fmtNum, fmtDelta, fmtRelative, fmtShortDate, fmtTime, toInputDate } from '../lib/format.ts';
 import { MAIN_RANGES, RANGE_LABEL, RANGE_SHORT, resolveRange, type RangeKey } from '../lib/periods.ts';
 import { summarize } from '../lib/stats.ts';
-import { classify, STATUS_LABEL } from '../lib/targets.ts';
 import { PERIOD_LABEL, SOURCE_LABEL } from '../lib/labels.ts';
-import { Badge, Segmented, useLocalStorage, DateInput } from '../components/ui.tsx';
+import { Segmented, useLocalStorage, DateInput } from '../components/ui.tsx';
 import { CategoryBar, MinAvgMaxBar } from '../components/charts.tsx';
-import { categorize, categorizeValue, CATEGORY_ICON, CATEGORY_LABEL, categoryRangeText } from '../lib/categories.ts';
+import { categorize, categorizeValue, CATEGORY_ICON, CATEGORY_LABEL } from '../lib/categories.ts';
 
 const RANGES: RangeKey[] = [...MAIN_RANGES, 'custom'];
 
@@ -18,7 +17,7 @@ export function HomePage() {
   const [custom, setCustom] = useState({ from: toInputDate(new Date(Date.now() - 13 * 86400e3)), to: toInputDate(new Date()) });
   const range = useMemo(() => resolveRange(rangeKey, new Date(), { from: new Date(custom.from), to: new Date(custom.to) }), [rangeKey, custom]);
   const s = useMemo(() => summarize(data.measurements, range, data.targets, true, data.settings.categories), [data.measurements, range, data.targets, data.settings.categories]);
-  const last = data.measurements[0];
+  const last3 = data.measurements.filter((m) => !m.deletedAt).slice(0, 3);
   const backupDue = !lastBackupAt || Date.now() - new Date(lastBackupAt).getTime() > data.settings.backupReminderDays * 86400e3;
 
   return (
@@ -29,23 +28,20 @@ export function HomePage() {
       </div>
 
       <section className="card" aria-labelledby="last">
-        <h2 id="last">Posljednje mjerenje</h2>
-        {last ? (
-          <Link to={`/measurement/${last.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-            <div className="reading">
-              <div className="sys"><div className="l">SYS</div><div className={`v val-${categorizeValue('sys', last.systolic, data.settings.categories)}`}>{last.systolic}</div><div className="u">mmHg</div></div>
-              <div className="dia"><div className="l">DIA</div><div className={`v val-${categorizeValue('dia', last.diastolic, data.settings.categories)}`}>{last.diastolic}</div><div className="u">mmHg</div></div>
-              <div className="pulse"><div className="l">Puls</div><div className="v val-neutral">{last.pulse ?? '–'}</div><div className="u">otk./min</div></div>
-            </div>
-            <div className="row" style={{ marginTop: 10, justifyContent: 'center' }}>
-              <span className="small muted tabular">{fmtDateTime(last.measuredAt)} · {PERIOD_LABEL[last.period]} · {SOURCE_LABEL[last.source]}</span>
-            </div>
-            <div className="row" style={{ marginTop: 6, justifyContent: 'center' }}>
-              {(() => { const c = categorize(last.systolic, last.diastolic, data.settings.categories); return <Badge kind={`cat-${c} big`} title={categoryRangeText(c, data.settings.categories)}>{CATEGORY_ICON[c]} {CATEGORY_LABEL[c]}</Badge>; })()}
-              {(() => { const st = classify(last, data.targets); return st === 'none' ? null : <Badge kind={st}>{st === 'in' ? '✓' : st === 'above' ? '↑' : '↓'} {STATUS_LABEL[st]}</Badge>; })()}
-              {(last.symptoms.length > 0 || last.notes) && <span className="small muted">{[...last.symptoms, last.notes].filter(Boolean).join(' · ')}</span>}
-            </div>
-          </Link>
+        <h2 id="last">Posljednja mjerenja</h2>
+        {last3.length ? (
+          <div className="last3">
+            <div className="hdr"><span /><span>SYS</span><span>DIA</span><span>Puls</span><span /></div>
+            {last3.map((m) => { const c = categorize(m.systolic, m.diastolic, data.settings.categories); return (
+              <Link key={m.id} to={`/measurement/${m.id}`} className="lrow" title={`${fmtDateTime(m.measuredAt)} · ${PERIOD_LABEL[m.period]} · ${SOURCE_LABEL[m.source]} · ${CATEGORY_LABEL[c]}`}>
+                <span className="when tabular">{fmtShortDate(m.measuredAt)}<br />{fmtTime(m.measuredAt)}</span>
+                <span className={`v tabular val-${categorizeValue('sys', m.systolic, data.settings.categories)}`}>{m.systolic}</span>
+                <span className={`v tabular val-${categorizeValue('dia', m.diastolic, data.settings.categories)}`}>{m.diastolic}</span>
+                <span className="v tabular val-neutral">{m.pulse ?? '–'}</span>
+                <span className={`ic val-${c}`} aria-label={CATEGORY_LABEL[c]}>{CATEGORY_ICON[c]}</span>
+              </Link>
+            ); })}
+          </div>
         ) : <p className="muted">Još nema mjerenja. Dodajte prvo mjerenje gumbom „Novo”.</p>}
       </section>
 

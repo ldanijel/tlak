@@ -1,3 +1,4 @@
+import type React from 'react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { MessageLevel } from '../lib/validation.ts';
 import { LEVEL_LABEL } from '../lib/validation.ts';
@@ -153,7 +154,7 @@ export function Spinner({ text }: { text?: string }) {
  * Datum kao DD.MM.GGGG, neovisno o jeziku uređaja (sistemsko <input type="date"> na iPhoneu s engleskim
  * postavkama prikazuje MM/DD/YYYY). Vrijednost prema van je ISO (GGGG-MM-DD) ili '' dok unos nije potpun.
  */
-export function DateInput({ value, onChange, required, className }: { value: string; onChange: (iso: string) => void; required?: boolean; className?: string }) {
+export function DateInput({ value, onChange, required, className, onComplete, inputRef }: { value: string; onChange: (iso: string) => void; required?: boolean; className?: string; onComplete?: () => void; inputRef?: React.Ref<HTMLInputElement> }) {
   const toShown = (iso: string) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso); return m ? `${m[3]}.${m[2]}.${m[1]}` : ''; };
   const [text, setText] = useState(() => toShown(value));
   const last = useRef(value);
@@ -166,16 +167,16 @@ export function DateInput({ value, onChange, required, className }: { value: str
     if (digits.length === 8) {
       const d = Number(digits.slice(0, 2)), mo = Number(digits.slice(2, 4)), y = Number(digits.slice(4));
       const dt = new Date(y, mo - 1, d);
-      if (dt.getFullYear() === y && dt.getMonth() === mo - 1 && dt.getDate() === d) { const iso = `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`; last.current = iso; onChange(iso); return; }
+      if (dt.getFullYear() === y && dt.getMonth() === mo - 1 && dt.getDate() === d) { const iso = `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`; last.current = iso; onChange(iso); onComplete?.(); return; }
     }
     if (!digits.length) { last.current = ''; onChange(''); }
   };
   const valid = text === '' || /^\d{2}\.\d{2}\.\d{4}$/.test(text) && toShown(last.current) === text;
-  return <input type="text" inputMode="numeric" placeholder="DD.MM.GGGG" pattern="\d{2}\.\d{2}\.\d{4}" value={text} onChange={(e) => commit(e.target.value)} required={required} className={`${className || ''}${valid ? '' : ' invalid'}`} aria-invalid={!valid} maxLength={10} />;
+  return <input ref={inputRef} type="text" inputMode="numeric" placeholder="DD.MM.GGGG" pattern="\d{2}\.\d{2}\.\d{4}" value={text} onFocus={(e) => e.currentTarget.select()} onChange={(e) => commit(e.target.value)} required={required} className={`${className || ''}${valid ? '' : ' invalid'}`} aria-invalid={!valid} maxLength={10} />;
 }
 
 /** Vrijeme kao HH:MM (24-satno), neovisno o jeziku uređaja. Vrijednost prema van je HH:MM ili ''. */
-export function TimeInput({ value, onChange, required, className }: { value: string; onChange: (hhmm: string) => void; required?: boolean; className?: string }) {
+export function TimeInput({ value, onChange, required, className, onComplete, inputRef }: { value: string; onChange: (hhmm: string) => void; required?: boolean; className?: string; onComplete?: () => void; inputRef?: React.Ref<HTMLInputElement> }) {
   const [text, setText] = useState(value);
   const last = useRef(value);
   useEffect(() => { if (value !== last.current) { last.current = value; setText(value); } }, [value]);
@@ -185,10 +186,10 @@ export function TimeInput({ value, onChange, required, className }: { value: str
     setText(shown);
     if (digits.length === 4) {
       const hh = Number(digits.slice(0, 2)), mm = Number(digits.slice(2));
-      if (hh <= 23 && mm <= 59) { const v = `${digits.slice(0, 2)}:${digits.slice(2)}`; last.current = v; onChange(v); return; }
+      if (hh <= 23 && mm <= 59) { const v = `${digits.slice(0, 2)}:${digits.slice(2)}`; last.current = v; onChange(v); onComplete?.(); return; }
     }
     if (!digits.length) { last.current = ''; onChange(''); }
   };
   const valid = text === '' || /^([01]\d|2[0-3]):[0-5]\d$/.test(text);
-  return <input type="text" inputMode="numeric" placeholder="HH:MM" pattern="([01]\d|2[0-3]):[0-5]\d" value={text} onChange={(e) => commit(e.target.value)} required={required} className={`${className || ''}${valid ? '' : ' invalid'}`} aria-invalid={!valid} maxLength={5} />;
+  return <input ref={inputRef} type="text" inputMode="numeric" placeholder="HH:MM" pattern="([01]\d|2[0-3]):[0-5]\d" value={text} onFocus={(e) => e.currentTarget.select()} onChange={(e) => commit(e.target.value)} required={required} className={`${className || ''}${valid ? '' : ' invalid'}`} aria-invalid={!valid} maxLength={5} />;
 }

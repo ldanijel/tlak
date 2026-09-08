@@ -287,3 +287,12 @@ kbd { font-size: .8em; padding: 1px 5px; border: 1px solid var(--border); border
 
 /* Datum/vrijeme kao tekst (DD.MM.GGGG, HH:MM): neispravan unos crveno */
 .field input.invalid, input.invalid { border-color: var(--critical); outline-color: var(--critical); }
+
+/* Početna: tri posljednja mjerenja u visini nekadašnjeg jednog (bez jedinica) */
+.last3 { display: flex; flex-direction: column; }
+.last3 .hdr, .last3 .lrow { display: grid; grid-template-columns: 62px 1fr 1fr 1fr 28px; gap: 6px; align-items: center; text-align: center; }
+.last3 .hdr { font-size: .7rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-2); padding-bottom: 2px; }
+.last3 .lrow { text-decoration: none; color: inherit; min-height: 42px; border-top: 1px solid var(--border); }
+.last3 .lrow .when { font-size: .68rem; line-height: 1.15; color: var(--text-3); text-align: left; }
+.last3 .lrow .v { font-size: 1.55rem; font-weight: 700; line-height: 1.1; }
+.last3 .lrow .ic { font-size: 1rem; }

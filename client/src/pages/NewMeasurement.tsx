@@ -45,7 +45,7 @@ export function NewMeasurementPage() {
   const [confirmed, setConfirmed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [checklistOpen, setChecklistOpen] = useState(data.settings.showChecklist && !editing);
-  const sysRef = useRef<HTMLInputElement>(null), diaRef = useRef<HTMLInputElement>(null), pulseRef = useRef<HTMLInputElement>(null), saveRef = useRef<HTMLButtonElement>(null);
+  const sysRef = useRef<HTMLInputElement>(null), diaRef = useRef<HTMLInputElement>(null), pulseRef = useRef<HTMLInputElement>(null), saveRef = useRef<HTMLButtonElement>(null), timeRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { if (!checklistOpen && !editing && sys === null) sysRef.current?.focus(); }, [checklistOpen, editing, sys]);
   useEffect(() => { if (!periodTouched) setPeriod(suggestPeriod(fromInputs(date, time))); }, [date, time, periodTouched]);
@@ -120,8 +120,8 @@ export function NewMeasurementPage() {
           <div className={`field bigfield pulse ${lowConf('pulse') ? 'flag' : ''}`}><label>Puls<NumberInput ref={pulseRef} value={pulse} onChange={(v) => { setPulse(v); setMsgs([]); setConfirmed(false); }} onKeyDown={keyNext(saveRef)} enterKeyHint="done" placeholder="–" /></label><span className="unit">otk./min · neobvezno{lowConf('pulse') && ' · provjerite'}</span></div>
         </div>
         <div className="grid2">
-          <Field label="Datum"><DateInput value={date} onChange={(v) => setDate(v)} required /></Field>
-          <Field label="Vrijeme"><TimeInput value={time} onChange={(v) => setTime(v)} required /></Field>
+          <Field label="Datum"><DateInput value={date} onChange={(v) => setDate(v)} onComplete={() => timeRef.current?.focus()} required /></Field>
+          <Field label="Vrijeme"><TimeInput inputRef={timeRef} value={time} onChange={(v) => setTime(v)} onComplete={() => { sysRef.current?.focus(); sysRef.current?.select(); }} required /></Field>
         </div>
         <Field label="Razdoblje" hint="Predloženo prema vremenu; možete promijeniti.">
           <Segmented value={period} onChange={(v) => { setPeriod(v); setPeriodTouched(true); }} options={(['morning', 'evening', 'other'] as Period[]).map((p) => ({ value: p, label: PERIOD_LABEL[p] }))} />

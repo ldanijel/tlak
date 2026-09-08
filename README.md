@@ -195,6 +195,12 @@ createdAt, updatedAt) i ostaje mapljiv na HealthKit/Health Connect.
   `Date` za nepotpun unos (prije je rušilo stranicu tijekom tipkanja).
 - Svi prosjeci (SYS, DIA, puls, jutro/večer, pulsni i srednji arterijski tlak) i razlike prikazuju se kao cijeli brojevi.
 
+- Početna: „Posljednja mjerenja” prikazuje tri zadnja mjerenja (datum i vrijeme, SYS, DIA, puls u bojama kategorija,
+  ikona kategorije) u istoj visini kartice kao prije jedno mjerenje, bez jedinica.
+- Unos: nakon osme znamenke datuma tipkovnica prelazi na vrijeme, nakon četvrte znamenke vremena na SYS; polja datuma
+  i vremena pri fokusu označe cijeli sadržaj, pa se tipka preko starog.
+- Izvještaj: redak „Dana s jutarnjim i večernjim mjerenjem” (N od ukupno) s napomenom ESC (najmanje 3, idealno 7 dana).
+
 ## Pozivni kod i preporučeni hosting (Fly.io)
 
 - `INVITE_CODE` (varijabla okoline ili `fly secrets set INVITE_CODE=…`): kad je postavljen, registracija traži pozivni kod, pa račun
